@@ -86,7 +86,7 @@ export default function Header() {
         listener.subscription.unsubscribe();
       }
     };
-  }, []);
+  }, [location.pathname]);
 
   async function signOut() {
     try {
