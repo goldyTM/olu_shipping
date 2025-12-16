@@ -96,7 +96,7 @@ export default function AdminDashboard() {
 
   const dispatchMutation = useMutation({
     mutationFn: (data: { vendor_decl_id: string; customer_email: string }) =>
-      fetch('http://localhost:4000/api/admin/dispatch', {
+      fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/admin/dispatch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
 
   const statusUpdateMutation = useMutation({
     mutationFn: (data: { tracking_id: string; status: string; location?: string; notes?: string }) =>
-      fetch('http://localhost:4000/api/admin/update-status', {
+      fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/admin/update-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
