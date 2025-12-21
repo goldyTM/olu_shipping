@@ -46,13 +46,17 @@ export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoad
         const newId = `VD-${year}-${random}`;
         
         // Check if this ID already exists in database
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('vendor_shipments')
           .select('vendor_decl_id')
-          .eq('vendor_decl_id', newId)
-          .single();
+          .eq('vendor_decl_id', newId);
         
-        if (!data) {
+        if (error && error.code !== 'PGRST116') {
+          // Real error occurred
+          throw error;
+        }
+        
+        if (!data || data.length === 0) {
           // ID is unique, use it
           setFormData(prev => ({ ...prev, vendor_decl_id: newId }));
           toast({
@@ -239,7 +243,7 @@ export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoad
                     required
                     min="1"
                     value={formData.quantity}
-                    onChange={(e) => handleChange('quantity', parseInt(e.target.value))}
+                    onChange={(e) => handleChange('quantity', parseInt(e.target.value) || 1)}
                     className="mt-1"
                   />
                 </div>
@@ -252,7 +256,7 @@ export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoad
                     min="0.1"
                     step="0.1"
                     value={formData.weight}
-                    onChange={(e) => handleChange('weight', parseFloat(e.target.value))}
+                    onChange={(e) => handleChange('weight', parseFloat(e.target.value) || 0)}
                     className="mt-1"
                   />
                 </div>

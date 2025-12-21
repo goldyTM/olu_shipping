@@ -51,21 +51,25 @@ async function generateUniqueTrackingId() {
 export const vendor = {
   declare: async (data: any) => {
     const { data: { user } } = await supabase.auth.getUser();
-    const vendorDeclId = await generateUniqueVendorDeclId();
+    
+    // Handle both camelCase (regular form) and snake_case (manual declaration modal)
+    const vendorDeclId = data.vendor_decl_id || await generateUniqueVendorDeclId();
     
     const { data: shipment, error } = await supabase
       .from('vendor_shipments')
       .insert({
         vendor_decl_id: vendorDeclId,
-        item_name: data.itemName,
-        quantity: data.quantity,
-        weight: data.weight,
-        consignee_name: data.consigneeName,
-        consignee_address: data.consigneeAddress,
-        consignee_email: data.consigneeEmail,
-        consignee_phone: data.consigneePhone,
-        hs_code: data.hsCode,
-        user_id: user?.id,
+        item_name: data.item_name || data.itemName,
+        quantity: parseInt(data.quantity) || 1,
+        weight: parseFloat(data.weight) || 0,
+        consignee_name: data.consignee_name || data.consigneeName,
+        consignee_address: data.consignee_address || data.consigneeAddress,
+        consignee_email: data.consignee_email || data.consigneeEmail,
+        consignee_phone: data.consignee_phone || data.consigneePhone,
+        hs_code: data.hs_code || data.hsCode || null,
+        invoice_pdf_url: data.invoice_pdf_url || null,
+        packing_list_pdf_url: data.packing_list_pdf_url || null,
+        user_id: user?.id || null, // null for manual admin declarations
       })
       .select()
       .single();
