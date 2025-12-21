@@ -86,7 +86,7 @@ export default function Header() {
         listener.subscription.unsubscribe();
       }
     };
-  }, [location.pathname]);
+  }, []); // Empty dependency - only run once on mount
 
   async function signOut() {
     try {

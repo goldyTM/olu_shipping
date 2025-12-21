@@ -23,109 +23,68 @@ export default function Login() {
     
     setLoading(true);
     
-    // Fallback: if login hangs, attempt a single reload to recover auth state
-    const reloadKey = 'authReloadAttempted';
-    const timestampKey = 'authReloadTimestamp';
-    
-    const fallbackTimer = setTimeout(() => {
-      try {
-        const attempted = sessionStorage.getItem(reloadKey);
-        const lastAttempt = sessionStorage.getItem(timestampKey);
-        const now = Date.now();
-        
-        // Only reload if we haven't attempted in the last 10 seconds
-        if (!attempted || (lastAttempt && now - parseInt(lastAttempt) > 10000)) {
-          console.warn('Login fallback: reloading page to recover auth state');
-          sessionStorage.setItem(reloadKey, '1');
-          sessionStorage.setItem(timestampKey, now.toString());
-          window.location.reload();
-        } else {
-          console.warn('Login fallback: recent reload detected, clearing loading state');
-          setLoading(false);
-        }
-      } catch (err) {
-        console.warn('Login fallback error', err);
-        setLoading(false);
-      }
-    }, 7000);
-
     try {
-      const resp = await supabase.auth.signInWithPassword({ email, password });
-      console.log('signInWithPassword response:', resp);
-      const { data, error } = resp as any;
+      // IMPORTANT: Clear any stale session data before attempting login
+      console.log('Clearing any existing session data before login...');
+      try {
+        // Clear all Supabase auth data from storage
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('sb-') || key.includes('supabase')) {
+            localStorage.removeItem(key);
+          }
+        });
+        sessionStorage.clear();
+      } catch (e) {
+        console.warn('Error clearing storage:', e);
+      }
+      
+      // Sign out any existing session (even if invalid)
+      await supabase.auth.signOut({ scope: 'local' });
+      
+      // Small delay to ensure cleanup completes
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Now attempt fresh login
+      console.log('Attempting fresh login...');
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
-        console.error('Supabase signIn error:', error);
-        toast({ title: 'Login error', description: error.message || JSON.stringify(error) });
+        console.error('Login error:', error);
+        toast({ 
+          title: 'Login Failed', 
+          description: error.message || 'Invalid email or password.',
+          variant: 'destructive'
+        });
         setLoading(false);
-        clearTimeout(fallbackTimer);
         return;
       }
 
-      let user = data?.user || null;
-      let session = data?.session || null;
-
-      if (!user) {
-        console.warn('No user returned from signInWithPassword:', resp);
-        // Try clearing any stale client session and retry once
-        try {
-          console.log('Attempting to clear local session and retry sign-in');
-          await supabase.auth.signOut({ scope: 'local' });
-          const retry = await supabase.auth.signInWithPassword({ email, password });
-          console.log('Retry signIn response:', retry);
-          const retryData = (retry as any)?.data;
-          const retryError = (retry as any)?.error;
-          if (retryError) {
-            console.error('Retry signIn error:', retryError);
-            toast({ title: 'Login error', description: retryError.message || JSON.stringify(retryError) });
-            setLoading(false);
-            try { 
-              sessionStorage.removeItem(reloadKey);
-              sessionStorage.removeItem(timestampKey);
-            } catch (_) {}
-            clearTimeout(fallbackTimer);
-            return;
-          }
-          user = retryData?.user || null;
-          session = retryData?.session || null;
-          if (!user) {
-            console.warn('Retry did not return a user either:', retry);
-            toast({ title: 'Login failed', description: 'Sign-in did not return a user. Try clearing your browser data.' });
-            setLoading(false);
-            try { 
-              sessionStorage.removeItem(reloadKey);
-              sessionStorage.removeItem(timestampKey);
-            } catch (_) {}
-            clearTimeout(fallbackTimer);
-            return;
-          }
-        } catch (e) {
-          console.error('Retry signIn exception:', e);
-          toast({ title: 'Login error', description: 'Unable to sign in. See console for details.' });
-          setLoading(false);
-          try { 
-            sessionStorage.removeItem(reloadKey);
-            sessionStorage.removeItem(timestampKey);
-          } catch (_) {}
-          clearTimeout(fallbackTimer);
-          return;
-        }
+      if (!data?.session || !data?.user) {
+        console.error('No session returned from login');
+        toast({ 
+          title: 'Login Failed', 
+          description: 'Could not establish session. Please try again.',
+          variant: 'destructive'
+        });
+        setLoading(false);
+        return;
       }
 
-      // Try to fetch profile to route user appropriately
+      console.log('Login successful, user:', data.user.email);
+      
+      // Fetch user profile to determine role
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role,vendor_id')
-        .eq('id', user.id)
+        .eq('id', data.user.id)
         .single();
-      
-      console.log('Profile fetch result:', { profile, profileError, userId: user.id });
       
       if (profileError) {
         console.error('Failed to fetch profile:', profileError);
         toast({
           title: 'Warning',
-          description: 'Could not fetch user profile. Some features may not work correctly.'
+          description: 'Could not fetch user profile. Redirecting to home page.',
+          variant: 'destructive'
         });
       }
       
@@ -137,27 +96,22 @@ export default function Login() {
       console.log('User role:', userRole, '| Navigating to:', targetPath);
       
       toast({
-        title: 'Login successful',
-        description: 'Redirecting...'
+        title: 'Login Successful',
+        description: `Welcome back${userRole !== 'receiver' ? ' to ' + userRole + ' portal' : ''}!`
       });
       
-      setLoading(false);
-      try { 
-        sessionStorage.removeItem('authReloadAttempted');
-        sessionStorage.removeItem('authReloadTimestamp');
-      } catch (_) {}
-      clearTimeout(fallbackTimer);
+      // Use replace to prevent back button issues
       navigate(targetPath, { replace: true });
+      setLoading(false);
 
     } catch (err: any) {
       console.error('Login error:', err);
-      toast({ title: 'Error', description: String(err) });
+      toast({ 
+        title: 'Login Error', 
+        description: err.message || 'An error occurred during login. Please try again.',
+        variant: 'destructive'
+      });
       setLoading(false);
-      try { 
-        sessionStorage.removeItem('authReloadAttempted');
-        sessionStorage.removeItem('authReloadTimestamp');
-      } catch (_) {}
-      clearTimeout(fallbackTimer);
     }
   }
 
@@ -168,40 +122,31 @@ export default function Login() {
     }
     
     setLoading(true);
-    // Fallback reload similar to onSubmit
-    const reloadKey = 'authReloadAttempted';
-    const fallbackTimer = setTimeout(() => {
-      try {
-        const attempted = sessionStorage.getItem(reloadKey);
-        if (!attempted) {
-          sessionStorage.setItem(reloadKey, '1');
-          console.warn('Magic link fallback: reloading page to recover auth state');
-          window.location.reload();
-        } else {
-          console.warn('Magic link fallback already attempted — clearing loading state');
-          setLoading(false);
-        }
-      } catch (err) {
-        console.warn('Magic link fallback error', err);
-        setLoading(false);
-      }
-    }, 7000);
 
     try {
       const { error } = await supabase.auth.signInWithOtp({ email });
       if (error) {
         console.error('Magic link error:', error);
-        toast({ title: 'Error', description: error.message });
+        toast({ 
+          title: 'Error', 
+          description: error.message,
+          variant: 'destructive'
+        });
       } else {
-        toast({ title: 'Magic link sent', description: 'Check your email for a sign-in link.' });
+        toast({ 
+          title: 'Magic Link Sent', 
+          description: 'Check your email for a sign-in link.' 
+        });
       }
     } catch (err: any) {
       console.error('Magic link unexpected error:', err);
-      toast({ title: 'Error', description: String(err) });
+      toast({ 
+        title: 'Error', 
+        description: err.message || 'Failed to send magic link.',
+        variant: 'destructive'
+      });
     } finally {
       setLoading(false);
-      try { sessionStorage.removeItem(reloadKey); } catch (_) {}
-      clearTimeout(fallbackTimer);
     }
   }
 

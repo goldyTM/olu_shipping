@@ -23,6 +23,17 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
         
         if (error) {
           console.error('ProtectedRoute: Session check error:', error);
+          // Clear stale session data on error
+          try {
+            await supabase.auth.signOut({ scope: 'local' });
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith('sb-') || key.includes('supabase')) {
+                localStorage.removeItem(key);
+              }
+            });
+          } catch (e) {
+            console.warn('Error clearing stale session:', e);
+          }
           setAuthenticated(false);
         } else {
           setAuthenticated(!!session);
