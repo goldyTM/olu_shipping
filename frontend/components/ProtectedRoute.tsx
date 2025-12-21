@@ -13,89 +13,41 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
 
   React.useEffect(() => {
     let mounted = true;
-    let fallbackTimer: NodeJS.Timeout;
 
-    // Timeout fallback: if auth check hangs, try a single reload to recover
-    const setupFallbackTimer = () => {
-      fallbackTimer = setTimeout(() => {
-        if (!mounted) return;
-        try {
-          const reloadKey = 'authReloadAttempted';
-          const attempted = sessionStorage.getItem(reloadKey);
-          const lastAttempt = sessionStorage.getItem('authReloadTimestamp');
-          const now = Date.now();
-          
-          // Only reload if we haven't attempted in the last 10 seconds
-          if (!attempted || (lastAttempt && now - parseInt(lastAttempt) > 10000)) {
-            console.warn('Auth check fallback: attempting reload to recover auth state');
-            sessionStorage.setItem(reloadKey, '1');
-            sessionStorage.setItem('authReloadTimestamp', now.toString());
-            window.location.reload();
-          } else {
-            console.warn('Auth check fallback: recent reload detected, clearing loading state');
-            setLoading(false);
-            setAuthenticated(false);
-          }
-        } catch (err) {
-          console.warn('Auth check fallback error', err);
-          setLoading(false);
-        }
-      }, 5000);
-    };
-
-    async function check() {
+    async function checkAuth() {
       try {
-        console.log('ProtectedRoute: Starting auth check...');
-        const { data, error } = await supabase.auth.getSession();
-        console.log('ProtectedRoute: Auth check result:', { hasSession: !!data?.session, error });
-
-        if (!mounted) return;
-
-        const isAuth = !!data?.session;
-        setAuthenticated(isAuth);
+        // Use getSession which reads from localStorage - faster and doesn't make network request
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        // Clear reload markers on successful auth check
-        if (isAuth) {
-          try {
-            sessionStorage.removeItem('authReloadAttempted');
-            sessionStorage.removeItem('authReloadTimestamp');
-          } catch (_) {}
+        if (!mounted) return;
+        
+        if (error) {
+          console.error('ProtectedRoute: Session check error:', error);
+          setAuthenticated(false);
+        } else {
+          setAuthenticated(!!session);
         }
       } catch (e) {
         console.error('ProtectedRoute: Auth check error:', e);
         if (mounted) setAuthenticated(false);
       } finally {
-        if (mounted) {
-          setLoading(false);
-          clearTimeout(fallbackTimer);
-        }
+        if (mounted) setLoading(false);
       }
     }
 
-    setupFallbackTimer();
-    check();
+    checkAuth();
 
+    // Listen for auth changes
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('ProtectedRoute: Auth state changed:', event, '| Session:', !!session);
       if (mounted) {
         setAuthenticated(!!session);
         setLoading(false);
-        clearTimeout(fallbackTimer);
-        
-        // Clear reload markers on auth state change
-        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-          try {
-            sessionStorage.removeItem('authReloadAttempted');
-            sessionStorage.removeItem('authReloadTimestamp');
-          } catch (_) {}
-        }
       }
     });
 
     return () => {
       mounted = false;
-      clearTimeout(fallbackTimer);
-      if (listener && typeof listener.subscription?.unsubscribe === 'function') {
+      if (listener?.subscription?.unsubscribe) {
         listener.subscription.unsubscribe();
       }
     };
@@ -105,8 +57,8 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-center">
-          <div className="animate-pulse text-gray-600 mb-2">Checking authentication...</div>
-          <div className="text-xs text-gray-400">If this takes too long, refresh the page</div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="text-gray-600">Loading...</div>
         </div>
       </div>
     );

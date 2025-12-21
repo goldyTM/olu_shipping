@@ -50,7 +50,9 @@ async function generateUniqueTrackingId() {
 // Vendor API
 export const vendor = {
   declare: async (data: any) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    // Use getSession instead of getUser to avoid network request
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     
     // Handle both camelCase (regular form) and snake_case (manual declaration modal)
     const vendorDeclId = data.vendor_decl_id || await generateUniqueVendorDeclId();
@@ -143,11 +145,13 @@ export const vendor = {
 // Admin API
 export const admin = {
   search: async (query?: string) => {
+    console.log('Admin search query:', query);
+    
     let supabaseQuery = supabase
       .from('vendor_shipments')
       .select(`
         *,
-        receiver_shipments!vendor_decl_id (
+        receiver_shipments (
           tracking_id,
           status,
           dispatch_date
@@ -156,6 +160,7 @@ export const admin = {
       .order('created_at', { ascending: false });
     
     if (query) {
+      // Search in vendor_decl_id, item_name, consignee_name
       supabaseQuery = supabaseQuery.or(
         `vendor_decl_id.ilike.%${query}%,item_name.ilike.%${query}%,consignee_name.ilike.%${query}%`
       );
@@ -174,6 +179,38 @@ export const admin = {
       receiver_status: shipment.receiver_shipments?.[0]?.status || null,
       dispatch_date: shipment.receiver_shipments?.[0]?.dispatch_date || null,
     })) || [];
+    
+    // If query looks like a tracking ID (TRK-), also search receiver_shipments
+    if (query?.startsWith('TRK-')) {
+      const { data: receiverData } = await supabase
+        .from('receiver_shipments')
+        .select(`
+          *,
+          vendor_shipments (
+            *
+          )
+        `)
+        .eq('tracking_id', query);
+      
+      if (receiverData && receiverData.length > 0) {
+        // Add matching receiver shipments to results
+        const receiverResults = receiverData.map((rs: any) => ({
+          ...rs.vendor_shipments,
+          tracking_id: rs.tracking_id,
+          receiver_status: rs.status,
+          dispatch_date: rs.dispatch_date,
+        }));
+        
+        // Merge and deduplicate
+        const allResults = [...transformedData];
+        receiverResults.forEach((rs: any) => {
+          if (!allResults.find((r: any) => r.vendor_decl_id === rs.vendor_decl_id)) {
+            allResults.push(rs);
+          }
+        });
+        return allResults;
+      }
+    }
     
     return transformedData;
   },
@@ -249,11 +286,13 @@ export const admin = {
 // Tracking API
 export const tracking = {
   track: async (trackingNumber: string) => {
+    console.log('Tracking lookup for:', trackingNumber);
+    
     let query = supabase
       .from('receiver_shipments')
       .select(`
         *,
-        vendor_shipments!vendor_decl_id (
+        vendor_shipments (
           item_name,
           quantity,
           weight,
@@ -283,7 +322,10 @@ export const tracking = {
     
     const { data, error } = await query.single();
     
-    if (error) throw new Error('Shipment not found or not yet dispatched');
+    if (error) {
+      console.error('Tracking error:', error);
+      throw new Error('Shipment not found or not yet dispatched');
+    }
     
     const vendorDetails = data.vendor_shipments || {};
     const updates = data.shipment_updates || [];
