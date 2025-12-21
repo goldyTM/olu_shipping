@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Shield, Search, Edit, Trash2, Package, Filter, Sparkles } from 'lucide-react';
+import { Shield, Search, Edit, Trash2, Package, Filter, Sparkles, PackagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,8 @@ import AdminShipmentsList from '../components/AdminShipmentsList';
 import AdminEditModal from '../components/AdminEditModal';
 import AdminDispatchModal from '../components/AdminDispatchModal';
 import AdminStatusUpdateModal from '../components/AdminStatusUpdateModal';
-import { admin } from '@/api-client';
+import AdminManualDeclarationModal from '../components/AdminManualDeclarationModal';
+import { admin, vendor } from '@/api-client';
 import type { AdminShipmentInfo } from '@/types';
 
 export default function AdminDashboard() {
@@ -22,6 +23,7 @@ export default function AdminDashboard() {
   const [editingShipment, setEditingShipment] = useState<AdminShipmentInfo | null>(null);
   const [dispatchingShipment, setDispatchingShipment] = useState<AdminShipmentInfo | null>(null);
   const [updatingStatusShipment, setUpdatingStatusShipment] = useState<AdminShipmentInfo | null>(null);
+  const [showManualDeclarationModal, setShowManualDeclarationModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -95,12 +97,7 @@ export default function AdminDashboard() {
   });
 
   const dispatchMutation = useMutation({
-    mutationFn: (data: { vendor_decl_id: string; customer_email: string }) =>
-      fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/admin/dispatch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      }).then(res => res.json()),
+    mutationFn: (data: { vendor_decl_id: string; customer_email: string }) => admin.dispatch(data),
     onSuccess: (data) => {
       toast({
         title: "✅ Shipment Dispatched",
@@ -123,12 +120,7 @@ export default function AdminDashboard() {
   });
 
   const statusUpdateMutation = useMutation({
-    mutationFn: (data: { tracking_id: string; status: string; location?: string; notes?: string }) =>
-      fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/admin/update-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      }).then(res => res.json()),
+    mutationFn: (data: { tracking_id: string; status: string; location?: string; notes?: string }) => admin.updateStatus(data),
     onSuccess: () => {
       toast({
         title: "Status Updated",
@@ -144,6 +136,26 @@ export default function AdminDashboard() {
       toast({
         title: "Update Failed",
         description: "Failed to update status. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const manualDeclarationMutation = useMutation({
+    mutationFn: (data: any) => vendor.declare(data),
+    onSuccess: (data) => {
+      toast({
+        title: "Declaration Created",
+        description: `Vendor declaration ${data.vendor_decl_id} has been created successfully.`,
+      });
+      setShowManualDeclarationModal(false);
+      handleSearch();
+    },
+    onError: (error) => {
+      console.error('Manual declaration error:', error);
+      toast({
+        title: "Creation Failed",
+        description: "Failed to create declaration. Please try again.",
         variant: "destructive",
       });
     },
@@ -165,6 +177,10 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleManualDeclaration = (data: any) => {
+    manualDeclarationMutation.mutate(data);
+  };
+
   const handleUpdateSubmit = (data: any) => {
     if (editingShipment) {
       updateMutation.mutate({
@@ -184,7 +200,7 @@ export default function AdminDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 relative z-10">
         <div className="mb-6 sm:mb-8 animate-in fade-in slide-in-from-top duration-700">
           <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-6 sm:p-8 shadow-2xl">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
                 <h1 className="text-2xl sm:text-4xl font-bold text-white flex items-center">
                   <Shield className="w-8 h-8 sm:w-10 sm:h-10 mr-3 sm:mr-4 animate-pulse" />
@@ -195,6 +211,13 @@ export default function AdminDashboard() {
                   Search, edit, and manage all shipment declarations with full control
                 </p>
               </div>
+              <Button
+                onClick={() => setShowManualDeclarationModal(true)}
+                className="bg-white text-red-600 hover:bg-red-50 shadow-lg font-semibold"
+              >
+                <PackagePlus className="w-5 h-5 mr-2" />
+                Create Manual Declaration
+              </Button>
             </div>
           </div>
         </div>
@@ -399,6 +422,16 @@ export default function AdminDashboard() {
             onUpdate={(data) => statusUpdateMutation.mutate(data)}
             onClose={() => setUpdatingStatusShipment(null)}
             isLoading={statusUpdateMutation.isPending}
+          />
+        )}
+
+        {/* Manual Declaration Modal */}
+        {showManualDeclarationModal && (
+          <AdminManualDeclarationModal
+            onSuccess={() => setShowManualDeclarationModal(false)}
+            onClose={() => setShowManualDeclarationModal(false)}
+            isLoading={manualDeclarationMutation.isPending}
+            onSubmit={handleManualDeclaration}
           />
         )}
       </div>

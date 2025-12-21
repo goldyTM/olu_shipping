@@ -1,83 +1,294 @@
-// Simple API client for Express backend
+// Direct Supabase API client (no Express backend needed)
+import supabase from './supabaseClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
-
-async function request(endpoint: string, options: RequestInit = {}) {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    throw new Error(error.error || `HTTP ${response.status}`);
+// Helper to generate unique vendor declaration ID
+async function generateUniqueVendorDeclId() {
+  const year = new Date().getFullYear();
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (attempts < maxAttempts) {
+    const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+    const vendorDeclId = `VD-${year}-${random}`;
+    
+    const { data } = await supabase
+      .from('vendor_shipments')
+      .select('vendor_decl_id')
+      .eq('vendor_decl_id', vendorDeclId)
+      .single();
+    
+    if (!data) return vendorDeclId;
+    attempts++;
   }
+  
+  throw new Error('Unable to generate unique vendor declaration ID');
+}
 
-  return response.json();
+// Helper to generate unique tracking ID
+async function generateUniqueTrackingId() {
+  const year = new Date().getFullYear();
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (attempts < maxAttempts) {
+    const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+    const trackingId = `TRK-${year}-${random}`;
+    
+    const { data } = await supabase
+      .from('receiver_shipments')
+      .select('tracking_id')
+      .eq('tracking_id', trackingId)
+      .single();
+    
+    if (!data) return trackingId;
+    attempts++;
+  }
+  
+  throw new Error('Unable to generate unique tracking ID');
 }
 
 // Vendor API
 export const vendor = {
-  declare: (data: any) => request('/vendor/declare', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-  
-  list: (params?: { vendorId?: string; userId?: string; limit?: number; offset?: number }) => {
-    const searchParams = new URLSearchParams();
-    if (params?.vendorId) searchParams.append('vendorId', params.vendorId);
-    if (params?.userId) searchParams.append('userId', params.userId);
-    if (params?.limit) searchParams.append('limit', params.limit.toString());
-    if (params?.offset) searchParams.append('offset', params.offset.toString());
-    const query = searchParams.toString();
-    return request(`/vendor/shipments${query ? '?' + query : ''}`);
+  declare: async (data: any) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    const vendorDeclId = await generateUniqueVendorDeclId();
+    
+    const { data: shipment, error } = await supabase
+      .from('vendor_shipments')
+      .insert({
+        vendor_decl_id: vendorDeclId,
+        item_name: data.itemName,
+        quantity: data.quantity,
+        weight: data.weight,
+        consignee_name: data.consigneeName,
+        consignee_address: data.consigneeAddress,
+        consignee_email: data.consigneeEmail,
+        consignee_phone: data.consigneePhone,
+        hs_code: data.hsCode,
+        user_id: user?.id,
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return shipment;
   },
   
-  getShipment: (id: string) => request(`/vendor/get-shipment/${id}`),
+  list: async (params?: { userId?: string; limit?: number; offset?: number }) => {
+    let query = supabase
+      .from('vendor_shipments')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (params?.userId) {
+      query = query.or(`user_id.eq.${params.userId},user_id.is.null`);
+    }
+    if (params?.limit) query = query.limit(params.limit);
+    if (params?.offset) query = query.range(params.offset, params.offset + (params.limit || 50) - 1);
+    
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  },
   
-  updateShipment: (id: string, data: any) => request(`/vendor/update-shipment/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
+  getShipment: async (id: string) => {
+    const { data, error } = await supabase
+      .from('vendor_shipments')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
   
-  deleteShipment: (id: string) => request(`/vendor/delete-shipment/${id}`, {
-    method: 'DELETE',
-  }),
+  updateShipment: async (id: string, updateData: any) => {
+    const { data, error } = await supabase
+      .from('vendor_shipments')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
   
-  checkStatus: (id: string) => request(`/vendor/check-status/${id}`),
+  deleteShipment: async (id: string) => {
+    const { error } = await supabase
+      .from('vendor_shipments')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+    return { success: true };
+  },
+  
+  checkStatus: async (id: string) => {
+    const { data, error } = await supabase
+      .from('receiver_shipments')
+      .select('tracking_id, status')
+      .eq('vendor_decl_id', id)
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
 };
 
 // Admin API
 export const admin = {
-  search: (query?: string) => {
-    const params = query ? `?query=${encodeURIComponent(query)}` : '';
-    return request(`/admin/search${params}`);
+  search: async (query?: string) => {
+    let supabaseQuery = supabase
+      .from('vendor_shipments')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (query) {
+      supabaseQuery = supabaseQuery.or(
+        `vendor_decl_id.ilike.%${query}%,item_name.ilike.%${query}%,consignee_name.ilike.%${query}%`
+      );
+    }
+    
+    const { data, error } = await supabaseQuery;
+    if (error) throw error;
+    return data;
   },
   
-  updateShipment: (id: string, data: any) => request(`/admin/update-shipment/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
+  updateShipment: async (id: string, updateData: any) => {
+    const { data, error } = await supabase
+      .from('vendor_shipments')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
   
-  deleteShipment: (id: string) => request(`/admin/delete-shipment/${id}`, {
-    method: 'DELETE',
-  }),
+  deleteShipment: async (id: string) => {
+    const { error } = await supabase
+      .from('vendor_shipments')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+    return { success: true };
+  },
+  
+  dispatch: async (data: { vendor_decl_id: string; customer_email: string }) => {
+    const trackingId = await generateUniqueTrackingId();
+    
+    const { data: shipment, error } = await supabase
+      .from('receiver_shipments')
+      .insert({
+        tracking_id: trackingId,
+        vendor_decl_id: data.vendor_decl_id,
+        customer_email: data.customer_email,
+        status: 'dispatched',
+        dispatch_date: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return { ...shipment, tracking_id: trackingId };
+  },
+  
+  updateStatus: async (data: { tracking_id: string; status: string; location?: string; notes?: string }) => {
+    // Update receiver shipment status
+    const { error: updateError } = await supabase
+      .from('receiver_shipments')
+      .update({ status: data.status })
+      .eq('tracking_id', data.tracking_id);
+    
+    if (updateError) throw updateError;
+    
+    // Add shipment update
+    const { data: update, error: insertError } = await supabase
+      .from('shipment_updates')
+      .insert({
+        tracking_id: data.tracking_id,
+        status: data.status,
+        location: data.location,
+        notes: data.notes,
+        timestamp: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    
+    if (insertError) throw insertError;
+    return update;
+  },
 };
 
 // Tracking API
 export const tracking = {
-  track: (trackingNumber: string) => request(`/tracking/track/${trackingNumber}`),
+  track: async (trackingNumber: string) => {
+    let query = supabase
+      .from('receiver_shipments')
+      .select(`
+        *,
+        vendor_shipments!vendor_decl_id (
+          item_name,
+          quantity,
+          weight,
+          consignee_name,
+          consignee_address,
+          consignee_email,
+          consignee_phone,
+          invoice_pdf_url,
+          packing_list_pdf_url,
+          created_at
+        ),
+        shipment_updates (
+          status,
+          location,
+          notes,
+          timestamp
+        )
+      `);
+    
+    if (trackingNumber.startsWith('TRK-')) {
+      query = query.eq('tracking_id', trackingNumber);
+    } else if (trackingNumber.startsWith('VD-')) {
+      query = query.eq('vendor_decl_id', trackingNumber);
+    } else {
+      query = query.eq('tracking_id', trackingNumber);
+    }
+    
+    const { data, error } = await query.single();
+    
+    if (error) throw new Error('Shipment not found or not yet dispatched');
+    
+    const vendorDetails = data.vendor_shipments || {};
+    const updates = data.shipment_updates || [];
+    
+    updates.sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    
+    return {
+      trackingId: data.tracking_id,
+      vendorDeclId: data.vendor_decl_id,
+      itemName: vendorDetails.item_name,
+      quantity: vendorDetails.quantity,
+      weight: vendorDetails.weight,
+      consigneeName: vendorDetails.consignee_name,
+      consigneeAddress: vendorDetails.consignee_address,
+      consigneeEmail: vendorDetails.consignee_email,
+      consigneePhone: vendorDetails.consignee_phone,
+      invoice_pdf_url: vendorDetails.invoice_pdf_url,
+      packing_list_pdf_url: vendorDetails.packing_list_pdf_url,
+      status: data.status || 'pending',
+      location: updates[0]?.location || null,
+      dispatchDate: data.created_at,
+      updates: updates
+    };
+  },
   
-  searchByQr: (qrCode: string) => request(`/tracking/search-by-qr/${qrCode}`),
-  
-  updateStatus: (id: string, status: string, location?: string) => 
-    request(`/tracking/update-status/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ status, location }),
-    }),
+  searchByQr: async (qrCode: string) => {
+    return tracking.track(qrCode);
+  },
 };
 
 export default {
