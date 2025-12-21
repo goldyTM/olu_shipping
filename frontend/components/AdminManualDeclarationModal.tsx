@@ -32,12 +32,52 @@ export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoad
   });
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
   const [uploadingPackingList, setUploadingPackingList] = useState(false);
+  const [generatingId, setGeneratingId] = useState(false);
 
-  const generateVendorId = () => {
-    const year = new Date().getFullYear();
-    const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
-    const newId = `VD-${year}-${random}`;
-    setFormData(prev => ({ ...prev, vendor_decl_id: newId }));
+  const generateVendorId = async () => {
+    setGeneratingId(true);
+    try {
+      const year = new Date().getFullYear();
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      while (attempts < maxAttempts) {
+        const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+        const newId = `VD-${year}-${random}`;
+        
+        // Check if this ID already exists in database
+        const { data } = await supabase
+          .from('vendor_shipments')
+          .select('vendor_decl_id')
+          .eq('vendor_decl_id', newId)
+          .single();
+        
+        if (!data) {
+          // ID is unique, use it
+          setFormData(prev => ({ ...prev, vendor_decl_id: newId }));
+          toast({
+            title: 'ID Generated',
+            description: `Vendor ID ${newId} is ready to use.`,
+          });
+          return;
+        }
+        
+        attempts++;
+      }
+      
+      throw new Error('Unable to generate unique vendor ID after 10 attempts');
+    } catch (error: any) {
+      if (error.message?.includes('Unable to generate')) {
+        toast({
+          title: 'Generation Failed',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
+      // If it's just "no rows returned" error, that means ID is unique, which is good
+    } finally {
+      setGeneratingId(false);
+    }
   };
 
   const uploadFile = async (file: File, type: 'invoice' | 'packing_list') => {
@@ -159,9 +199,14 @@ export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoad
                 type="button"
                 variant="outline"
                 onClick={generateVendorId}
+                disabled={generatingId}
                 title="Generate new vendor ID"
               >
-                <RefreshCw className="w-4 h-4" />
+                {generatingId ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
               </Button>
             </div>
             <p className="text-xs text-blue-600 mt-1">Click refresh to auto-generate a unique ID</p>
