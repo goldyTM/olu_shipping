@@ -293,14 +293,23 @@ app.get('/api/admin/search', async (req, res) => {
 app.put('/api/admin/update-shipment/:id', async (req, res) => {
   try {
     const updateData = {};
+    if (req.body.vendor_decl_id) updateData.vendor_decl_id = req.body.vendor_decl_id;
     if (req.body.itemName) updateData.item_name = req.body.itemName;
+    if (req.body.item_name) updateData.item_name = req.body.item_name;
     if (req.body.quantity) updateData.quantity = req.body.quantity;
     if (req.body.weight) updateData.weight = req.body.weight;
     if (req.body.consigneeName) updateData.consignee_name = req.body.consigneeName;
+    if (req.body.consignee_name) updateData.consignee_name = req.body.consignee_name;
     if (req.body.consigneeAddress) updateData.consignee_address = req.body.consigneeAddress;
+    if (req.body.consignee_address) updateData.consignee_address = req.body.consignee_address;
     if (req.body.consigneeEmail) updateData.consignee_email = req.body.consigneeEmail;
+    if (req.body.consignee_email) updateData.consignee_email = req.body.consignee_email;
     if (req.body.consigneePhone) updateData.consignee_phone = req.body.consigneePhone;
-    if (req.body.hsCode) updateData.hs_code = req.body.hsCode;
+    if (req.body.consignee_phone) updateData.consignee_phone = req.body.consignee_phone;
+    if (req.body.hsCode !== undefined) updateData.hs_code = req.body.hsCode;
+    if (req.body.hs_code !== undefined) updateData.hs_code = req.body.hs_code;
+    if (req.body.invoice_pdf_url !== undefined) updateData.invoice_pdf_url = req.body.invoice_pdf_url;
+    if (req.body.packing_list_pdf_url !== undefined) updateData.packing_list_pdf_url = req.body.packing_list_pdf_url;
 
     const { data, error } = await supabaseAdmin
       .from('vendor_shipments')
@@ -446,6 +455,8 @@ app.get('/api/tracking/track/:trackingNumber', async (req, res) => {
           consignee_address,
           consignee_email,
           consignee_phone,
+          invoice_pdf_url,
+          packing_list_pdf_url,
           created_at
         ),
         shipment_updates (
@@ -494,6 +505,8 @@ app.get('/api/tracking/track/:trackingNumber', async (req, res) => {
       consigneeAddress: vendorDetails.consignee_address,
       consigneeEmail: vendorDetails.consignee_email,
       consigneePhone: vendorDetails.consignee_phone,
+      invoice_pdf_url: vendorDetails.invoice_pdf_url,
+      packing_list_pdf_url: vendorDetails.packing_list_pdf_url,
       status: receiverShipment.status || 'pending',
       location: updates[0]?.location || null,
       dispatchDate: receiverShipment.created_at,

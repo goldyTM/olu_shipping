@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
-import { Package, MapPin, Clock, User, Mail, RefreshCw, Plane, Ship, Truck, CheckCircle2, PackageCheck, Warehouse } from 'lucide-react';
+import { Package, MapPin, Clock, User, Mail, RefreshCw, Plane, Ship, Truck, CheckCircle2, PackageCheck, Warehouse, FileText, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -359,6 +359,60 @@ export default function TrackingResults() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Documents Card */}
+            {(trackingInfo.invoice_pdf_url || trackingInfo.packing_list_pdf_url) && (
+              <Card className="shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                <CardHeader className="bg-gradient-to-r from-green-50 to-blue-50">
+                  <CardTitle className="flex items-center">
+                    <FileText className="w-5 h-5 mr-2 text-green-600" />
+                    Shipment Documents
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {trackingInfo.invoice_pdf_url && (
+                      <a
+                        href={trackingInfo.invoice_pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-4 border-2 border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition-all group"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                            <FileText className="w-6 h-6 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-800">Invoice</p>
+                            <p className="text-xs text-gray-500">Click to view/download</p>
+                          </div>
+                        </div>
+                        <Download className="w-5 h-5 text-blue-600 group-hover:scale-110 transition-transform" />
+                      </a>
+                    )}
+                    {trackingInfo.packing_list_pdf_url && (
+                      <a
+                        href={trackingInfo.packing_list_pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-4 border-2 border-green-200 rounded-lg hover:bg-green-50 hover:border-green-400 transition-all group"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                            <FileText className="w-6 h-6 text-green-600" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-800">Packing List</p>
+                            <p className="text-xs text-gray-500">Click to view/download</p>
+                          </div>
+                        </div>
+                        <Download className="w-5 h-5 text-green-600 group-hover:scale-110 transition-transform" />
+                      </a>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Tracking Timeline Card with Enhanced Animation */}
             <Card className="shadow-lg hover:shadow-xl transition-all duration-300">
