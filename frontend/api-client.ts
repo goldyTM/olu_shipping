@@ -151,7 +151,7 @@ export const admin = {
       .from('vendor_shipments')
       .select(`
         *,
-        receiver_shipments (
+        receiver_shipments!receiver_shipments_vendor_decl_id_fkey (
           tracking_id,
           status,
           dispatch_date
@@ -186,7 +186,7 @@ export const admin = {
         .from('receiver_shipments')
         .select(`
           *,
-          vendor_shipments (
+          vendor_shipments!receiver_shipments_vendor_decl_id_fkey (
             *
           )
         `)
@@ -292,7 +292,7 @@ export const tracking = {
       .from('receiver_shipments')
       .select(`
         *,
-        vendor_shipments (
+        vendor_shipments!receiver_shipments_vendor_decl_id_fkey (
           item_name,
           quantity,
           weight,
@@ -304,7 +304,7 @@ export const tracking = {
           packing_list_pdf_url,
           created_at
         ),
-        shipment_updates (
+        shipment_updates!shipment_updates_tracking_id_fkey (
           status,
           location,
           notes,
