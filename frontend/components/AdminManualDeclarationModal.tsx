@@ -46,14 +46,19 @@ export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoad
         const newId = `VD-${year}-${random}`;
         
         // Check if this ID already exists in database
-        const { data, error } = await supabase
+        const { data, error, count } = await supabase
           .from('vendor_shipments')
-          .select('vendor_decl_id')
+          .select('vendor_decl_id', { count: 'exact', head: false })
           .eq('vendor_decl_id', newId);
         
-        if (error && error.code !== 'PGRST116') {
-          // Real error occurred
-          throw error;
+        if (error) {
+          console.error('Error checking vendor ID:', error);
+          toast({
+            title: 'Query Error',
+            description: error.message || 'Failed to check vendor ID. Please try again.',
+            variant: 'destructive',
+          });
+          return;
         }
         
         if (!data || data.length === 0) {
@@ -69,16 +74,18 @@ export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoad
         attempts++;
       }
       
-      throw new Error('Unable to generate unique vendor ID after 10 attempts');
+      toast({
+        title: 'Generation Failed',
+        description: 'Unable to generate unique vendor ID after 10 attempts. Please try again.',
+        variant: 'destructive',
+      });
     } catch (error: any) {
-      if (error.message?.includes('Unable to generate')) {
-        toast({
-          title: 'Generation Failed',
-          description: error.message,
-          variant: 'destructive',
-        });
-      }
-      // If it's just "no rows returned" error, that means ID is unique, which is good
+      console.error('Error generating vendor ID:', error);
+      toast({
+        title: 'Generation Failed',
+        description: error.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
     } finally {
       setGeneratingId(false);
     }
