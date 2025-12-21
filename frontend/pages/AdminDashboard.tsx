@@ -29,8 +29,8 @@ export default function AdminDashboard() {
 
   // Load all shipments on mount
   React.useEffect(() => {
-    handleSearch();
-  }, []);
+    searchMutation.mutate({ query: '', type: undefined });
+  }, []); // Empty dependency array - only run once on mount
 
   const searchMutation = useMutation({
     mutationFn: (params: { query: string; type: any }) => 
@@ -161,11 +161,11 @@ export default function AdminDashboard() {
     },
   });
 
-  const handleSearch = () => {
+  const handleSearch = React.useCallback(() => {
     // Allow search with empty query to load all shipments
     const type = searchType === 'all' ? undefined : searchType;
     searchMutation.mutate({ query: searchQuery.trim(), type });
-  };
+  }, [searchQuery, searchType]);
 
   const handleEdit = (shipment: AdminShipmentInfo) => {
     setEditingShipment(shipment);

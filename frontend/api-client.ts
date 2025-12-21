@@ -145,7 +145,14 @@ export const admin = {
   search: async (query?: string) => {
     let supabaseQuery = supabase
       .from('vendor_shipments')
-      .select('*')
+      .select(`
+        *,
+        receiver_shipments!vendor_decl_id (
+          tracking_id,
+          status,
+          dispatch_date
+        )
+      `)
       .order('created_at', { ascending: false });
     
     if (query) {
@@ -155,8 +162,20 @@ export const admin = {
     }
     
     const { data, error } = await supabaseQuery;
-    if (error) throw error;
-    return data;
+    if (error) {
+      console.error('Admin search error:', error);
+      throw error;
+    }
+    
+    // Transform data to include tracking_id at top level
+    const transformedData = data?.map((shipment: any) => ({
+      ...shipment,
+      tracking_id: shipment.receiver_shipments?.[0]?.tracking_id || null,
+      receiver_status: shipment.receiver_shipments?.[0]?.status || null,
+      dispatch_date: shipment.receiver_shipments?.[0]?.dispatch_date || null,
+    })) || [];
+    
+    return transformedData;
   },
   
   updateShipment: async (id: string, updateData: any) => {
