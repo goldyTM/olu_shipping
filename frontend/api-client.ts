@@ -288,53 +288,56 @@ export const tracking = {
   track: async (trackingNumber: string) => {
     console.log('Tracking lookup for:', trackingNumber);
     
-    let query = supabase
+    // First get the receiver shipment
+    let baseQuery = supabase
       .from('receiver_shipments')
-      .select(`
-        *,
-        vendor_shipments!receiver_shipments_vendor_decl_id_fkey (
-          item_name,
-          quantity,
-          weight,
-          consignee_name,
-          consignee_address,
-          consignee_email,
-          consignee_phone,
-          invoice_pdf_url,
-          packing_list_pdf_url,
-          created_at
-        ),
-        shipment_updates!shipment_updates_tracking_id_fkey (
-          status,
-          location,
-          notes,
-          timestamp
-        )
-      `);
+      .select('*');
     
     if (trackingNumber.startsWith('TRK-')) {
-      query = query.eq('tracking_id', trackingNumber);
+      baseQuery = baseQuery.eq('tracking_id', trackingNumber);
     } else if (trackingNumber.startsWith('VD-')) {
-      query = query.eq('vendor_decl_id', trackingNumber);
+      baseQuery = baseQuery.eq('vendor_decl_id', trackingNumber);
     } else {
-      query = query.eq('tracking_id', trackingNumber);
+      baseQuery = baseQuery.eq('tracking_id', trackingNumber);
     }
     
-    const { data, error } = await query.single();
+    const { data: receiverShipment, error: receiverError } = await baseQuery.single();
     
-    if (error) {
-      console.error('Tracking error:', error);
+    if (receiverError || !receiverShipment) {
+      console.error('Receiver shipment not found:', receiverError);
       throw new Error('Shipment not found or not yet dispatched');
     }
     
-    const vendorDetails = data.vendor_shipments || {};
-    const updates = data.shipment_updates || [];
+    // Get vendor shipment details
+    const { data: vendorShipment, error: vendorError } = await supabase
+      .from('vendor_shipments')
+      .select('*')
+      .eq('vendor_decl_id', receiverShipment.vendor_decl_id)
+      .single();
     
-    updates.sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    if (vendorError) {
+      console.error('Vendor shipment error:', vendorError);
+    }
+    
+    // Get shipment updates
+    const { data: updates, error: updatesError } = await supabase
+      .from('shipment_updates')
+      .select('*')
+      .eq('tracking_id', receiverShipment.tracking_id)
+      .order('timestamp', { ascending: true });
+    
+    if (updatesError) {
+      console.error('Updates error:', updatesError);
+    }
+    
+    const vendorDetails = vendorShipment || {};
+    const shipmentUpdates = updates || [];
+    
+    shipmentUpdates.sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     
     return {
-      trackingId: data.tracking_id,
-      vendorDeclId: data.vendor_decl_id,
+      trackingId: receiverShipment.tracking_id,
+      vendorDeclId: receiverShipment.vendor_decl_id,
       itemName: vendorDetails.item_name,
       quantity: vendorDetails.quantity,
       weight: vendorDetails.weight,
@@ -344,10 +347,10 @@ export const tracking = {
       consigneePhone: vendorDetails.consignee_phone,
       invoice_pdf_url: vendorDetails.invoice_pdf_url,
       packing_list_pdf_url: vendorDetails.packing_list_pdf_url,
-      status: data.status || 'pending',
-      location: updates[0]?.location || null,
-      dispatchDate: data.created_at,
-      updates: updates
+      status: receiverShipment.status || 'pending',
+      location: shipmentUpdates[0]?.location || null,
+      dispatchDate: receiverShipment.created_at,
+      updates: shipmentUpdates
     };
   },
   
