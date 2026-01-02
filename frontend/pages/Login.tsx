@@ -48,28 +48,19 @@ export default function Login() {
     }, 15000); // 15 second timeout
     
     try {
-      // IMPORTANT: Clear any stale session data before attempting login
-      console.log('Clearing any existing session data before login...');
-      try {
-        // Clear all Supabase auth data from storage
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('sb-') || key.includes('supabase')) {
-            localStorage.removeItem(key);
-          }
-        });
-        sessionStorage.clear();
-      } catch (e) {
-        console.warn('Error clearing storage:', e);
+      // Only clear session data if this is a retry (not first attempt)
+      if (retryCount > 0) {
+        console.log('Retry attempt - clearing any existing session data...');
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (e) {
+          console.warn('Error clearing storage:', e);
+        }
       }
       
-      // Sign out any existing session (even if invalid)
-      await supabase.auth.signOut({ scope: 'local' });
-      
-      // Small delay to ensure cleanup completes
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
       // Now attempt fresh login
-      console.log('Attempting fresh login...');
+      console.log('Attempting login...');
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
