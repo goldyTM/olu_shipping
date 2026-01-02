@@ -12,6 +12,7 @@ export default function Header() {
   const [userEmail, setUserEmail] = React.useState<string | null>(null);
   const [userRole, setUserRole] = React.useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   React.useEffect(() => {
     let mounted = true;
@@ -52,6 +53,13 @@ export default function Header() {
       console.log('Header: Auth state changed:', event, '| Session exists:', !!session);
       
       if (!mounted) return;
+      
+      if (event === 'SIGNED_OUT') {
+        setUserEmail(null);
+        setUserRole(null);
+        return;
+      }
+      
       setUserEmail(session?.user?.email ?? null);
       
       if (session?.user) {
@@ -89,7 +97,13 @@ export default function Header() {
   }, []); // Empty dependency - only run once on mount
 
   async function signOut() {
+    if (isLoggingOut) {
+      console.log('Header: Already logging out, ignoring duplicate call');
+      return;
+    }
+    
     try {
+      setIsLoggingOut(true);
       console.log('Header: User clicked sign out button');
       
       // Close mobile menu
@@ -105,12 +119,13 @@ export default function Header() {
           description: error.message || 'Unable to log out. Please try again.',
           variant: 'destructive'
         });
+        setIsLoggingOut(false);
         return;
       }
       
       console.log('Header: Sign out successful');
       
-      // Clear local state (auth listener will also handle this)
+      // Clear local state
       setUserEmail(null);
       setUserRole(null);
       
@@ -123,6 +138,9 @@ export default function Header() {
       // Navigate to home page
       navigate('/', { replace: true });
       
+      // Reset logging out state after navigation
+      setTimeout(() => setIsLoggingOut(false), 1000);
+      
     } catch (error) {
       console.error('Header: Logout exception:', error);
       toast({
@@ -130,6 +148,7 @@ export default function Header() {
         description: 'An unexpected error occurred. Please try again.',
         variant: 'destructive'
       });
+      setIsLoggingOut(false);
     }
   }
 
@@ -203,9 +222,14 @@ export default function Header() {
                     {userEmail}
                   </span>
                 </Button>
-                <Button variant="ghost" onClick={signOut} className="flex items-center space-x-2">
+                <Button 
+                  variant="ghost" 
+                  onClick={signOut} 
+                  disabled={isLoggingOut}
+                  className="flex items-center space-x-2"
+                >
                   <LogOut className="w-4 h-4" />
-                  <span>Logout</span>
+                  <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
                 </Button>
               </div>
             ) : (
@@ -289,11 +313,12 @@ export default function Header() {
                   </div>
                   <Button 
                     variant="ghost" 
-                    onClick={() => { signOut(); setMobileMenuOpen(false); }}
+                    onClick={signOut}
+                    disabled={isLoggingOut}
                     className="w-full justify-start space-x-2 mt-2"
                   >
                     <LogOut className="w-4 h-4" />
-                    <span>Logout</span>
+                    <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
                   </Button>
                 </>
               ) : (
