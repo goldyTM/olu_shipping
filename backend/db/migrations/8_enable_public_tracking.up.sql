@@ -1,3 +1,17 @@
+-- Drop existing policies if they exist (to allow re-running this migration)
+DROP POLICY IF EXISTS "Allow public read for tracking" ON receiver_shipments;
+DROP POLICY IF EXISTS "Allow public read for shipment updates" ON shipment_updates;
+DROP POLICY IF EXISTS "Allow public read for vendor shipments" ON vendor_shipments;
+DROP POLICY IF EXISTS "Allow authenticated insert for vendor shipments" ON vendor_shipments;
+DROP POLICY IF EXISTS "Allow authenticated update for vendor shipments" ON vendor_shipments;
+DROP POLICY IF EXISTS "Allow authenticated delete for vendor shipments" ON vendor_shipments;
+DROP POLICY IF EXISTS "Allow authenticated insert for receiver shipments" ON receiver_shipments;
+DROP POLICY IF EXISTS "Allow authenticated update for receiver shipments" ON receiver_shipments;
+DROP POLICY IF EXISTS "Allow authenticated delete for receiver shipments" ON receiver_shipments;
+DROP POLICY IF EXISTS "Allow authenticated insert for shipment updates" ON shipment_updates;
+DROP POLICY IF EXISTS "Allow authenticated update for shipment updates" ON shipment_updates;
+DROP POLICY IF EXISTS "Allow authenticated delete for shipment updates" ON shipment_updates;
+
 -- Enable Row Level Security on tables
 ALTER TABLE vendor_shipments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE receiver_shipments ENABLE ROW LEVEL SECURITY;
