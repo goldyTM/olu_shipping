@@ -10,14 +10,29 @@ type Props = {
 export default function ProtectedRoute({ children, redirectTo = '/login' }: Props) {
   const [loading, setLoading] = React.useState(true);
   const [authenticated, setAuthenticated] = React.useState(false);
+  const checkAuthTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
 
     async function checkAuth() {
       try {
+        // Set a timeout to prevent infinite loading on page refresh
+        checkAuthTimeoutRef.current = setTimeout(() => {
+          if (mounted && loading) {
+            console.warn('Auth check timeout - assuming not authenticated');
+            setAuthenticated(false);
+            setLoading(false);
+          }
+        }, 5000); // 5 second timeout
+
         // Use getSession which reads from localStorage - faster and doesn't make network request
         const { data: { session }, error } = await supabase.auth.getSession();
+        
+        // Clear timeout on successful check
+        if (checkAuthTimeoutRef.current) {
+          clearTimeout(checkAuthTimeoutRef.current);
+        }
         
         if (!mounted) return;
         
@@ -52,6 +67,9 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
 
     return () => {
       mounted = false;
+      if (checkAuthTimeoutRef.current) {
+        clearTimeout(checkAuthTimeoutRef.current);
+      }
       if (listener?.subscription?.unsubscribe) {
         listener.subscription.unsubscribe();
       }

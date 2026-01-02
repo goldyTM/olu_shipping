@@ -11,8 +11,19 @@ export default function Login() {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+  const [retryCount, setRetryCount] = React.useState(0);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const loginTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  React.useEffect(() => {
+    // Cleanup timeout on unmount
+    return () => {
+      if (loginTimeoutRef.current) {
+        clearTimeout(loginTimeoutRef.current);
+      }
+    };
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,6 +33,19 @@ export default function Login() {
     }
     
     setLoading(true);
+    
+    // Set a timeout to prevent infinite loading
+    loginTimeoutRef.current = setTimeout(() => {
+      if (loading) {
+        setLoading(false);
+        setRetryCount(prev => prev + 1);
+        toast({ 
+          title: 'Login Timeout', 
+          description: 'Login is taking too long. Please try again.',
+          variant: 'destructive'
+        });
+      }
+    }, 15000); // 15 second timeout
     
     try {
       // IMPORTANT: Clear any stale session data before attempting login
@@ -72,6 +96,11 @@ export default function Login() {
 
       console.log('Login successful, user:', data.user.email);
       
+      // Clear timeout on success
+      if (loginTimeoutRef.current) {
+        clearTimeout(loginTimeoutRef.current);
+      }
+      
       // Fetch user profile to determine role
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -100,12 +129,22 @@ export default function Login() {
         description: `Welcome back${userRole !== 'receiver' ? ' to ' + userRole + ' portal' : ''}!`
       });
       
+      // Reset retry count on successful login
+      setRetryCount(0);
+      
       // Use replace to prevent back button issues
       navigate(targetPath, { replace: true });
       setLoading(false);
 
     } catch (err: any) {
       console.error('Login error:', err);
+      
+      // Clear timeout on error
+      if (loginTimeoutRef.current) {
+        clearTimeout(loginTimeoutRef.current);
+      }
+      
+      setRetryCount(prev => prev + 1);
       toast({ 
         title: 'Login Error', 
         description: err.message || 'An error occurred during login. Please try again.',
@@ -233,7 +272,7 @@ export default function Login() {
                   ) : (
                     <span className="flex items-center justify-center">
                       <LogIn className="w-5 h-5 mr-2" />
-                      Sign In
+                      Sign In{retryCount > 0 && ` (Retry ${retryCount})`}
                     </span>
                   )}
                 </Button>

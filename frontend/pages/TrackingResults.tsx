@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { Package, MapPin, Clock, User, Mail, RefreshCw, Plane, Ship, Truck, CheckCircle2, PackageCheck, Warehouse, FileText, Download } from 'lucide-react';
@@ -10,6 +11,11 @@ import { tracking } from '@/api-client';
 export default function TrackingResults() {
   const { trackingId } = useParams<{ trackingId: string }>();
   const queryClient = useQueryClient();
+
+  // Scroll to top when component mounts or tracking ID changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [trackingId]);
 
   const { data: trackingInfo, isLoading, error } = useQuery({
     queryKey: ['tracking', trackingId],
