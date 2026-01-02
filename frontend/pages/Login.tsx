@@ -36,30 +36,17 @@ export default function Login() {
     
     // Set a timeout to prevent infinite loading
     loginTimeoutRef.current = setTimeout(() => {
-      if (loading) {
-        setLoading(false);
-        setRetryCount(prev => prev + 1);
-        toast({ 
-          title: 'Login Timeout', 
-          description: 'Login is taking too long. Please try again.',
-          variant: 'destructive'
-        });
-      }
+      setLoading(false);
+      setRetryCount(prev => prev + 1);
+      toast({ 
+        title: 'Login Timeout', 
+        description: 'Login is taking too long. Please try again.',
+        variant: 'destructive'
+      });
     }, 15000); // 15 second timeout
     
     try {
-      // Only clear session data if this is a retry (not first attempt)
-      if (retryCount > 0) {
-        console.log('Retry attempt - clearing any existing session data...');
-        try {
-          await supabase.auth.signOut({ scope: 'local' });
-          await new Promise(resolve => setTimeout(resolve, 100));
-        } catch (e) {
-          console.warn('Error clearing storage:', e);
-        }
-      }
-      
-      // Now attempt fresh login
+      // Attempt login directly without clearing session
       console.log('Attempting login...');
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 

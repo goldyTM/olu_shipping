@@ -90,18 +90,16 @@ export default function Header() {
 
   async function signOut() {
     try {
-      console.log('Starting sign out...');
+      console.log('Header: User clicked sign out button');
       
-      // Clear local state first
-      setUserEmail(null);
-      setUserRole(null);
+      // Close mobile menu
       setMobileMenuOpen(false);
       
-      // Sign out from Supabase - wait for it to complete
+      // Sign out from Supabase - this will trigger the auth state change listener
       const { error } = await supabase.auth.signOut();
       
       if (error) {
-        console.error('Logout error:', error);
+        console.error('Header: Logout error:', error);
         toast({
           title: 'Logout Failed',
           description: error.message || 'Unable to log out. Please try again.',
@@ -110,21 +108,11 @@ export default function Header() {
         return;
       }
       
-      console.log('Sign out successful');
+      console.log('Header: Sign out successful');
       
-      // Manually clear all auth-related storage
-      try {
-        localStorage.removeItem('supabase.auth.token');
-        // Clear any other Supabase keys
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('sb-') || key.includes('supabase')) {
-            localStorage.removeItem(key);
-          }
-        });
-        sessionStorage.clear();
-      } catch (e) {
-        console.warn('Error clearing storage:', e);
-      }
+      // Clear local state (auth listener will also handle this)
+      setUserEmail(null);
+      setUserRole(null);
       
       // Show success message
       toast({
@@ -136,7 +124,7 @@ export default function Header() {
       navigate('/', { replace: true });
       
     } catch (error) {
-      console.error('Logout exception:', error);
+      console.error('Header: Logout exception:', error);
       toast({
         title: 'Logout Failed',
         description: 'An unexpected error occurred. Please try again.',
