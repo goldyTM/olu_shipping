@@ -19,20 +19,6 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
       try {
         console.log('ProtectedRoute: Checking authentication...');
         
-        // Quick check of localStorage first to see if we have a session
-        const storageKey = `sb-${import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0]}-auth-token`;
-        const hasStoredSession = localStorage.getItem(storageKey);
-        
-        if (!hasStoredSession) {
-          console.log('ProtectedRoute: No stored session found in localStorage');
-          authCheckCompleted = true;
-          if (mounted) {
-            setAuthenticated(false);
-            setLoading(false);
-          }
-          return;
-        }
-        
         // Use getSession which reads from localStorage
         const { data: { session }, error } = await supabase.auth.getSession();
         
@@ -43,15 +29,16 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
         if (error) {
           console.error('ProtectedRoute: Session check error:', error);
           setAuthenticated(false);
+          setLoading(false);
         } else if (session) {
           console.log('ProtectedRoute: Valid session found for user:', session.user.email);
           setAuthenticated(true);
+          setLoading(false);
         } else {
           console.log('ProtectedRoute: No valid session');
           setAuthenticated(false);
+          setLoading(false);
         }
-        
-        setLoading(false);
       } catch (e) {
         console.error('ProtectedRoute: Auth check error:', e);
         authCheckCompleted = true;
@@ -65,10 +52,10 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
     // Start auth check immediately
     checkAuth();
 
-    // Set a backup timeout - increased to 5 seconds
+    // Set a backup timeout - only if auth check hasn't completed
     const timeoutId = setTimeout(() => {
       if (!authCheckCompleted && mounted) {
-        console.warn('ProtectedRoute: Auth check timeout, proceeding with current state');
+        console.warn('ProtectedRoute: Auth check timeout, assuming no session');
         setAuthenticated(false);
         setLoading(false);
       }
@@ -76,7 +63,7 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
 
     // Listen for auth changes
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('ProtectedRoute: Auth state changed -', event);
+      console.log('ProtectedRoute: Auth state changed -', event, 'Session:', !!session);
       if (mounted) {
         if (event === 'SIGNED_OUT') {
           console.log('ProtectedRoute: User signed out');
@@ -88,8 +75,10 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
           console.log('ProtectedRoute: Token refreshed');
           setAuthenticated(true);
         } else if (session) {
+          console.log('ProtectedRoute: Session exists, authenticated');
           setAuthenticated(true);
-        } else {
+        } else if (event === 'INITIAL_SESSION' && !session) {
+          console.log('ProtectedRoute: Initial session check - no session');
           setAuthenticated(false);
         }
         setLoading(false);

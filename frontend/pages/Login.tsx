@@ -79,6 +79,9 @@ export default function Login() {
         clearTimeout(loginTimeoutRef.current);
       }
       
+      // Small delay to ensure session is saved to localStorage
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
       // Fetch user profile to determine role
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
