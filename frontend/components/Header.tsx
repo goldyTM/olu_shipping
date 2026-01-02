@@ -102,15 +102,25 @@ export default function Header() {
       return;
     }
     
+    setIsLoggingOut(true);
+    console.log('Header: User clicked sign out button');
+    
+    // Failsafe timeout to reset state if logout hangs
+    const timeoutId = setTimeout(() => {
+      console.warn('Header: Logout timeout, forcing state reset');
+      setIsLoggingOut(false);
+    }, 5000);
+    
     try {
-      setIsLoggingOut(true);
-      console.log('Header: User clicked sign out button');
-      
       // Close mobile menu
       setMobileMenuOpen(false);
       
-      // Sign out from Supabase - this will trigger the auth state change listener
+      // Sign out from Supabase
+      console.log('Header: Calling supabase.auth.signOut()');
       const { error } = await supabase.auth.signOut();
+      
+      // Clear timeout since we got a response
+      clearTimeout(timeoutId);
       
       if (error) {
         console.error('Header: Logout error:', error);
@@ -128,6 +138,7 @@ export default function Header() {
       // Clear local state
       setUserEmail(null);
       setUserRole(null);
+      setIsLoggingOut(false);
       
       // Show success message
       toast({
@@ -138,14 +149,12 @@ export default function Header() {
       // Navigate to home page
       navigate('/', { replace: true });
       
-      // Reset logging out state after navigation
-      setTimeout(() => setIsLoggingOut(false), 1000);
-      
-    } catch (error) {
+    } catch (error: any) {
+      clearTimeout(timeoutId);
       console.error('Header: Logout exception:', error);
       toast({
         title: 'Logout Failed',
-        description: 'An unexpected error occurred. Please try again.',
+        description: error?.message || 'An unexpected error occurred. Please try again.',
         variant: 'destructive'
       });
       setIsLoggingOut(false);
