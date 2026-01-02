@@ -1,4 +1,4 @@
-import { Edit, Trash2, Package, User, Mail, Calendar, Weight, Hash, Truck, MapPin } from 'lucide-react';
+import { Edit, Trash2, Package, User, Mail, Calendar, Weight, Hash, Truck, MapPin, FileText, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -56,6 +56,18 @@ export default function AdminShipmentsList({
                   {shipment.vendor_id && (
                     <Badge variant="outline" className="font-mono text-xs bg-blue-50">
                       Vendor: {shipment.vendor_id}
+                    </Badge>
+                  )}
+                  {shipment.invoice_pdf_url && (
+                    <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                      <FileText className="w-3 h-3 mr-1" />
+                      Invoice
+                    </Badge>
+                  )}
+                  {shipment.packing_list_pdf_url && (
+                    <Badge variant="outline" className="text-xs bg-teal-50 text-teal-700 border-teal-200">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Packing List
                     </Badge>
                   )}
                 </div>

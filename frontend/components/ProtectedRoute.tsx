@@ -23,17 +23,6 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
         
         if (error) {
           console.error('ProtectedRoute: Session check error:', error);
-          // Clear stale session data on error
-          try {
-            await supabase.auth.signOut({ scope: 'local' });
-            Object.keys(localStorage).forEach(key => {
-              if (key.startsWith('sb-') || key.includes('supabase')) {
-                localStorage.removeItem(key);
-              }
-            });
-          } catch (e) {
-            console.warn('Error clearing stale session:', e);
-          }
           setAuthenticated(false);
         } else {
           setAuthenticated(!!session);
@@ -51,7 +40,12 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
     // Listen for auth changes
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (mounted) {
-        setAuthenticated(!!session);
+        // Only clear auth on explicit SIGN_OUT event
+        if (event === 'SIGNED_OUT') {
+          setAuthenticated(false);
+        } else if (session) {
+          setAuthenticated(true);
+        }
         setLoading(false);
       }
     });

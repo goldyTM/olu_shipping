@@ -4,6 +4,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Upload, FileText, RefreshCw } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
+import supabase from '@/supabaseClient';
 import type { VendorShipment } from '@/types';
 
 interface VendorEditModalProps {
@@ -14,6 +17,7 @@ interface VendorEditModalProps {
 }
 
 export default function VendorEditModal({ shipment, onSave, onClose, isLoading }: VendorEditModalProps) {
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     itemName: shipment.item_name,
     quantity: shipment.quantity,
@@ -23,7 +27,11 @@ export default function VendorEditModal({ shipment, onSave, onClose, isLoading }
     consigneeEmail: shipment.consignee_email,
     consigneePhone: shipment.consignee_phone,
     hsCode: shipment.hs_code || '',
+    invoice_pdf_url: shipment.invoice_pdf_url || '',
+    packing_list_pdf_url: shipment.packing_list_pdf_url || '',
   });
+  const [uploadingInvoice, setUploadingInvoice] = useState(false);
+  const [uploadingPackingList, setUploadingPackingList] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +46,78 @@ export default function VendorEditModal({ shipment, onSave, onClose, isLoading }
       ...prev,
       [field]: value
     }));
+  };
+
+  const uploadFile = async (file: File, type: 'invoice' | 'packing_list') => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${shipment.vendor_decl_id}_${type}_${Date.now()}.${fileExt}`;
+      const filePath = `shipment-documents/${fileName}`;
+
+      if (type === 'invoice') setUploadingInvoice(true);
+      else setUploadingPackingList(true);
+
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('shipment-files')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) throw error;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('shipment-files')
+        .getPublicUrl(filePath);
+
+      const field = type === 'invoice' ? 'invoice_pdf_url' : 'packing_list_pdf_url';
+      setFormData(prev => ({ ...prev, [field]: publicUrl }));
+
+      toast({
+        title: 'Upload Successful',
+        description: `${type === 'invoice' ? 'Invoice' : 'Packing list'} uploaded successfully.`,
+      });
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast({
+        title: 'Upload Failed',
+        description: error.message || 'Failed to upload file. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      if (type === 'invoice') setUploadingInvoice(false);
+      else setUploadingPackingList(false);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'invoice' | 'packing_list') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+    if (!validTypes.includes(file.type)) {
+      toast({
+        title: 'Invalid File Type',
+        description: 'Please upload PDF or image files (PNG, JPG, JPEG) only.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: 'File Too Large',
+        description: 'File size must be less than 5MB.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    uploadFile(file, type);
   };
 
   return (
@@ -104,6 +184,96 @@ export default function VendorEditModal({ shipment, onSave, onClose, isLoading }
                   onChange={(e) => handleChange('hsCode', e.target.value)}
                   className="mt-1"
                 />
+              </div>
+
+              <h3 className="text-lg font-medium text-gray-900 pt-4 border-t">Document Uploads</h3>
+              
+              <div>
+                <Label htmlFor="invoice">Invoice (PDF/Image)</Label>
+                <div className="mt-1">
+                  <input
+                    id="invoice"
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => handleFileSelect(e, 'invoice')}
+                    disabled={uploadingInvoice}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => document.getElementById('invoice')?.click()}
+                    disabled={uploadingInvoice}
+                    className="w-full justify-start"
+                  >
+                    {uploadingInvoice ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4 mr-2" />
+                        {formData.invoice_pdf_url ? 'Replace Invoice' : 'Upload Invoice'}
+                      </>
+                    )}
+                  </Button>
+                  {formData.invoice_pdf_url && (
+                    <a 
+                      href={formData.invoice_pdf_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline mt-1 block"
+                    >
+                      <FileText className="w-3 h-3 inline mr-1" />
+                      View current invoice
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="packingList">Packing List (PDF/Image)</Label>
+                <div className="mt-1">
+                  <input
+                    id="packingList"
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => handleFileSelect(e, 'packing_list')}
+                    disabled={uploadingPackingList}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => document.getElementById('packingList')?.click()}
+                    disabled={uploadingPackingList}
+                    className="w-full justify-start"
+                  >
+                    {uploadingPackingList ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4 mr-2" />
+                        {formData.packing_list_pdf_url ? 'Replace Packing List' : 'Upload Packing List'}
+                      </>
+                    )}
+                  </Button>
+                  {formData.packing_list_pdf_url && (
+                    <a 
+                      href={formData.packing_list_pdf_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline mt-1 block"
+                    >
+                      <FileText className="w-3 h-3 inline mr-1" />
+                      View current packing list
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
 
