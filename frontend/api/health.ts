@@ -10,14 +10,10 @@ export default async function handler(
     const supabaseUrl = process.env.VITE_SUPABASE_URL!;
     const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY!;
     
-    // Verify Supabase anon key in Authorization header
-    const authHeader = req.headers['authorization'];
-    const providedKey = authHeader?.replace('Bearer ', '');
-    
-    if (!providedKey || providedKey !== supabaseKey) {
-      return res.status(401).json({
+    if (!supabaseUrl || !supabaseKey) {
+      return res.status(500).json({
         status: 'error',
-        message: 'Unauthorized - Invalid Supabase key'
+        message: 'Supabase configuration missing'
       });
     }
     
