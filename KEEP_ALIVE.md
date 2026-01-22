@@ -25,15 +25,21 @@ This project includes a health check system to keep Supabase active on the free 
    - **Name**: `HEALTH_CHECK_URL`
    - **Value**: Your Vercel deployment URL + `/api/health` (e.g., `https://your-app.vercel.app/api/health`)
 
-### Alternative: Manual Cron Setup
+### Alternative: Using cron-job.org
 
-If not using GitHub Actions, you can use any external cron service:
+1. Go to [cron-job.org](https://cron-job.org) and create a free account
+2. Create a new cron job with these settings:
+   - **URL**: `https://your-app.vercel.app/api/health`
+   - **Schedule**: Every 6 hours (or your preference)
+   - **Request method**: GET
+   - **Custom headers** (optional, for security):
+     - Header name: `X-Health-Token`
+     - Header value: Your secret token (generate a random string)
+3. If using authentication, add `HEALTH_CHECK_TOKEN` to your Vercel environment variables with the same token value
 
-- **cron-job.org**: Free service to ping URLs on schedule
+Other options:
 - **UptimeRobot**: Free monitoring with 5-minute intervals
-- **Render**: Built-in cron jobs if hosting there
-
-Simply configure them to ping your `/health` endpoint every few hours.
+- **GitHub Actions**: Already configured in `.github/workflows/keep-alive.yml`
 
 ## Testing
 
