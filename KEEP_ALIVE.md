@@ -32,14 +32,16 @@ This project includes a health check system to keep Supabase active on the free 
    - **URL**: `https://your-app.vercel.app/api/health`
    - **Schedule**: Every 6 hours (or your preference)
    - **Request method**: GET
-   - **Custom headers** (optional, for security):
-     - Header name: `X-Health-Token`
-     - Header value: Your secret token (generate a random string)
-3. If using authentication, add `HEALTH_CHECK_TOKEN` to your Vercel environment variables with the same token value
+   - **Custom headers** (required):
+     - Header name: `Authorization`
+     - Header value: `Bearer YOUR_SUPABASE_ANON_KEY`
+     - (Use your Supabase anon key from your `.env` file)
+
+**Note**: The endpoint requires your Supabase anon key in the Authorization header for security.
 
 Other options:
-- **UptimeRobot**: Free monitoring with 5-minute intervals
-- **GitHub Actions**: Already configured in `.github/workflows/keep-alive.yml`
+- **UptimeRobot**: Free monitoring (configure with custom headers)
+- **GitHub Actions**: Already configured in `.github/workflows/keep-alive.yml` (needs header setup)
 
 ## Testing
 

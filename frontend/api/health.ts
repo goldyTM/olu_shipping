@@ -6,21 +6,20 @@ export default async function handler(
   res: VercelResponse
 ) {
   try {
-    // Optional: Verify auth token if provided
-    const authToken = process.env.HEALTH_CHECK_TOKEN;
-    if (authToken) {
-      const providedToken = req.headers['x-health-token'] || req.headers['authorization']?.replace('Bearer ', '');
-      if (providedToken !== authToken) {
-        return res.status(401).json({
-          status: 'error',
-          message: 'Unauthorized'
-        });
-      }
-    }
-    
     // Initialize Supabase client
     const supabaseUrl = process.env.VITE_SUPABASE_URL!;
     const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY!;
+    
+    // Verify Supabase anon key in Authorization header
+    const authHeader = req.headers['authorization'];
+    const providedKey = authHeader?.replace('Bearer ', '');
+    
+    if (!providedKey || providedKey !== supabaseKey) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Unauthorized - Invalid Supabase key'
+      });
+    }
     
     const supabase = createClient(supabaseUrl, supabaseKey);
     
