@@ -14,7 +14,10 @@ export default function TrackingResults() {
 
   // Scroll to top when component mounts or tracking ID changes
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Use setTimeout to ensure DOM is fully rendered
+    setTimeout(() => {
+      window.scrollTo(0, 0);
+    }, 100);
   }, [trackingId]);
 
   const { data: trackingInfo, isLoading, error } = useQuery({

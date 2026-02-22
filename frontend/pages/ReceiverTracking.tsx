@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Search, QrCode, Package, ArrowRight, Ship, Sparkles } from 'lucide-react';
+import { Search, QrCode, Package, ArrowRight, Ship, Sparkles, Camera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,8 +10,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { tracking } from '@/api-client';
 
 export default function ReceiverTracking() {
-  const [trackingId, setTrackingId] = useState('');
-  const [qrCode, setQrCode] = useState('');
+  const [searchValue, setSearchValue] = useState('');
+  const [isQrMode, setIsQrMode] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -39,27 +39,48 @@ export default function ReceiverTracking() {
     onError: (error) => {
       console.error('QR search error:', error);
       toast({
-        title: "QR Search Failed",
-        description: "Unable to find shipment with the provided QR code.",
+        title: "Search Failed",
+        description: "Unable to find shipment with the provided input.",
         variant: "destructive",
       });
     },
   });
 
-  const handleTrackingSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (trackingId.trim()) {
-      // Remove any emoji and extra whitespace from tracking ID
-      const cleanTrackingId = trackingId.trim().replace(/[^\w-]/g, '');
-      trackMutation.mutate(cleanTrackingId);
+    if (!searchValue.trim()) return;
+
+    const input = searchValue.trim();
+
+    // Scroll to top before processing
+    window.scrollTo(0, 0);
+
+    if (isQrMode) {
+      // QR mode: use searchByQr
+      qrSearchMutation.mutate(input);
+    } else {
+      // ID mode: try track first
+      try {
+        const result = await tracking.track(input);
+        navigate(`/tracking/${result.trackingId}`);
+      } catch (error) {
+        // If track fails, try QR search as fallback
+        try {
+          const qrResult = await tracking.searchByQr(input);
+          navigate(`/tracking/${qrResult.trackingId}`);
+        } catch (qrError) {
+          toast({
+            title: "Search Failed",
+            description: "Unable to find shipment with the provided input.",
+            variant: "destructive",
+          });
+        }
+      }
     }
   };
 
-  const handleQRSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (qrCode.trim()) {
-      qrSearchMutation.mutate(qrCode.trim());
-    }
+  const toggleQrMode = () => {
+    setIsQrMode(!isQrMode);
   };
 
   return (
@@ -92,38 +113,56 @@ export default function ReceiverTracking() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mb-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-1 gap-6 sm:gap-8 mb-12">
           <Card className="hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-blue-100">
             <CardHeader className="text-center bg-gradient-to-r from-blue-50 to-purple-50">
               <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
                 <Search className="w-8 h-8 text-white" />
               </div>
-              <CardTitle className="text-xl">Track by ID</CardTitle>
+              <CardTitle className="text-xl">Track Your Shipment</CardTitle>
               <CardDescription className="text-base">
-                Enter your tracking ID or vendor declaration ID
+                Enter your tracking ID, vendor declaration ID, or QR code content
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
-              <form onSubmit={handleTrackingSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <Label htmlFor="trackingId" className="text-base font-semibold">Tracking ID or Declaration ID</Label>
-                  <Input
-                    id="trackingId"
-                    type="text"
-                    placeholder="TRK-2025-12345 or VD-2025-12345"
-                    value={trackingId}
-                    onChange={(e) => setTrackingId(e.target.value)}
-                    className="mt-2 text-lg h-12 border-2 focus:border-blue-500 transition-colors"
-                  />
-                  <p className="text-xs text-gray-500 mt-2">Enter customer tracking number (TRK-) or vendor declaration ID (VD-)</p>
+                  <Label htmlFor="searchValue" className="text-base font-semibold">
+                    {isQrMode ? 'QR Code Content' : 'Tracking ID or Declaration ID'}
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="searchValue"
+                      type="text"
+                      placeholder={isQrMode ? "OLU-SHIPPING:VD-2024-1234" : "TRK-2025-12345 or VD-2025-12345"}
+                      value={searchValue}
+                      onChange={(e) => setSearchValue(e.target.value)}
+                      className="mt-2 text-lg h-12 border-2 focus:border-blue-500 transition-colors pr-12"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={toggleQrMode}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 hover:bg-gray-100 rounded-full"
+                      title={isQrMode ? "Switch to ID search" : "Switch to QR search"}
+                    >
+                      {isQrMode ? <Search className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {isQrMode 
+                      ? "Enter QR code content or paste the scanned text" 
+                      : "Enter customer tracking number (TRK-) or vendor declaration ID (VD-)"
+                    }
+                  </p>
                 </div>
                 <Button 
                   type="submit" 
                   className="w-full h-12 text-lg bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl transition-all duration-300"
-                  disabled={!trackingId.trim() || trackMutation.isPending}
+                  disabled={!searchValue.trim() || trackMutation.isPending || qrSearchMutation.isPending}
                 >
-                  {trackMutation.isPending ? (
+                  {(trackMutation.isPending || qrSearchMutation.isPending) ? (
                     <span className="flex items-center">
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -134,53 +173,6 @@ export default function ReceiverTracking() {
                   ) : (
                     <>
                       Track Shipment
-                      <ArrowRight className="w-5 h-5 ml-2" />
-                    </>
-                  )}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-green-100">
-            <CardHeader className="text-center bg-gradient-to-r from-green-50 to-emerald-50">
-              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <QrCode className="w-8 h-8 text-white" />
-              </div>
-              <CardTitle className="text-xl">Track by QR Code</CardTitle>
-              <CardDescription className="text-base">
-                Enter QR code content or scan directly
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <form onSubmit={handleQRSubmit} className="space-y-5">
-                <div>
-                  <Label htmlFor="qrCode" className="text-base font-semibold">QR Code Content</Label>
-                  <Input
-                    id="qrCode"
-                    type="text"
-                    placeholder="OLU-SHIPPING:VD-2024-1234"
-                    value={qrCode}
-                    onChange={(e) => setQrCode(e.target.value)}
-                    className="mt-2 text-lg h-12 border-2 focus:border-green-500 transition-colors"
-                  />
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full h-12 text-lg bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 shadow-lg hover:shadow-xl transition-all duration-300"
-                  disabled={!qrCode.trim() || qrSearchMutation.isPending}
-                >
-                  {qrSearchMutation.isPending ? (
-                    <span className="flex items-center">
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Searching...
-                    </span>
-                  ) : (
-                    <>
-                      Search by QR
                       <ArrowRight className="w-5 h-5 ml-2" />
                     </>
                   )}
@@ -209,11 +201,11 @@ export default function ReceiverTracking() {
                   </li>
                   <li className="flex items-start">
                     <span className="text-blue-600 mr-2 font-bold">•</span>
-                    <span><strong className="text-blue-800">QR codes</strong> are available on your shipping documents</span>
+                    <span><strong className="text-blue-800">Vendor Declaration ID (VD-XXXX)</strong> is the internal reference number</span>
                   </li>
                   <li className="flex items-start">
                     <span className="text-blue-600 mr-2 font-bold">•</span>
-                    <span><strong className="text-blue-800">Not a vendor?</strong> Don't use Vendor Declaration IDs (VD-XXXX) here - those are internal</span>
+                    <span><strong className="text-blue-800">QR codes</strong> contain shipment information - use the camera button to switch to QR mode</span>
                   </li>
                   <li className="flex items-start">
                     <span className="text-blue-600 mr-2 font-bold">•</span>
@@ -224,7 +216,6 @@ export default function ReceiverTracking() {
             </div>
           </CardContent>
         </Card>
-      </div>
       </div>
     </div>
   );

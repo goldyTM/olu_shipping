@@ -10,6 +10,25 @@ interface TrackShipmentParams {
 export const track = api<TrackShipmentParams, TrackingInfo>(
   { expose: true, method: "GET", path: "/tracking/:trackingId" },
   async (req) => {
+    let actualTrackingId = req.trackingId;
+
+    // If the input looks like a vendor declaration ID (VD-), find the corresponding tracking ID
+    if (req.trackingId.startsWith('VD-')) {
+      const vendorShipment = await shippingDB.queryRow<{
+        tracking_id: string;
+      }>`
+        SELECT tracking_id
+        FROM receiver_shipments 
+        WHERE vendor_decl_id = ${req.trackingId}
+      `;
+
+      if (!vendorShipment) {
+        throw APIError.notFound("Vendor declaration ID not found");
+      }
+
+      actualTrackingId = vendorShipment.tracking_id;
+    }
+
     // Get receiver shipment info
     const receiverShipment = await shippingDB.queryRow<{
       tracking_id: string;
@@ -20,7 +39,7 @@ export const track = api<TrackShipmentParams, TrackingInfo>(
     }>`
       SELECT tracking_id, vendor_decl_id, customer_email, status, dispatch_date
       FROM receiver_shipments 
-      WHERE tracking_id = ${req.trackingId}
+      WHERE tracking_id = ${actualTrackingId}
     `;
 
     if (!receiverShipment) {

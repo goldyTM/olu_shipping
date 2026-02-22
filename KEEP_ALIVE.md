@@ -2,58 +2,50 @@
 
 This project includes a health check system to keep Supabase active on the free tier.
 
-## Components
+## Quick Setup (Recommended)
 
-### 1. Health Check Endpoint
-- **Location**: `frontend/api/health.ts`
-- **URL**: `/api/health` (GET)
-- **Purpose**: Vercel serverless function that queries Supabase to keep it active
+**Ping Supabase REST API directly** - no deployment needed!
 
-### 2. GitHub Actions Workflow
-- **Location**: `.github/workflows/keep-alive.yml`
-- **Schedule**: Runs every 6 hours
-- **Can be triggered manually** from the Actions tab
-
-## Setup Instructions
-
-### For GitHub Actions:
-
-1. Deploy your app to Vercel (the health endpoint will be automatically available at `/api/health`)
-2. Go to your GitHub repository settings
-3. Navigate to **Secrets and variables** → **Actions**
-4. Add a new repository secret:
-   - **Name**: `HEALTH_CHECK_URL`
-   - **Value**: Your Vercel deployment URL + `/api/health` (e.g., `https://your-app.vercel.app/api/health`)
-
-### Alternative: Using cron-job.org
+### Using cron-job.org:
 
 1. Go to [cron-job.org](https://cron-job.org) and create a free account
 2. Create a new cron job with these settings:
-   - **URL**: `https://your-app.vercel.app/api/health`
-   - **Schedule**: Every 6 hours (or your preference)
+   - **URL**: `https://tndlbjxkdrftxbcxyawi.supabase.co/rest/v1/vendor_shipments?limit=1`
+   - **Schedule**: Every 6 hours (or every 1 hour for best results)
    - **Request method**: GET
-   - No headers required
+   - **Custom headers**:
+     - Header name: `apikey`
+     - Header value: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRuZGxianhrZHJmdHhiY3h5YXdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MjAyMzMsImV4cCI6MjA4MDk5NjIzM30.jYuDrthdhVBxS5jqNN8ByNAgv4zJ2afOVK9vaqQrM5A`
+     
+     Also add:
+     - Header name: `Authorization`
+     - Header value: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRuZGxianhrZHJmdHhiY3h5YXdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MjAyMzMsImV4cCI6MjA4MDk5NjIzM30.jYuDrthdhVBxS5jqNN8ByNAgv4zJ2afOVK9vaqQrM5A`
 
-The endpoint is public and will ping your Supabase database to keep it active.
+This pings your Supabase database directly and keeps it active.
 
-Other options:
-- **UptimeRobot**: Free monitoring with 5-minute intervals
-- **GitHub Actions**: Already configured in `.github/workflows/keep-alive.yml`
+## Alternative: Vercel Health Endpoint
+
+If you prefer to use the Vercel endpoint:
+
+1. Ensure environment variables are set in Vercel:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+2. Deploy and use: `https://your-app.vercel.app/api/health`
+
+## Alternative: GitHub Actions
+
+A GitHub Actions workflow is configured in `.github/workflows/keep-alive.yml`:
+- Runs every 6 hours automatically
+- Can be triggered manually from the Actions tab
+- Update the URL in the workflow to your preferred endpoint
 
 ## Testing
-
-Test the health check endpoint:
+Supabase endpoint directly:
 ```bash
-curl https://your-app.vercel.app/api/health
+curl -H "apikey: YOUR_ANON_KEY" -H "Authorization: Bearer YOUR_ANON_KEY" "https://tndlbjxkdrftxbcxyawi.supabase.co/rest/v1/vendor_shipments?limit=1"
 ```
 
-Expected response:
-```json
-{
-  "status": "ok",
-  "timestamp": "2026-01-22T...",
-  "database": "connected"
-}
+Expected response: JSON array (empty or with data)
 ```
 
 ## Notes
