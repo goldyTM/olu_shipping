@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import supabase from '@/supabaseClient';
 
@@ -13,9 +14,10 @@ interface AdminManualDeclarationModalProps {
   onClose: () => void;
   isLoading: boolean;
   onSubmit: (data: any) => void;
+  containerId?: number; // Optional container to assign the declaration to
 }
 
-export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoading, onSubmit }: AdminManualDeclarationModalProps) {
+export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoading, onSubmit, containerId }: AdminManualDeclarationModalProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     vendor_decl_id: '',
@@ -170,7 +172,14 @@ export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoad
       });
       return;
     }
-    onSubmit(formData);
+    
+    // Include container assignment if specified
+    const submissionData = {
+      ...formData,
+      containerId: containerId // Will be assigned after creation if provided
+    };
+    
+    onSubmit(submissionData);
   };
 
   const handleChange = (field: string, value: string | number) => {
@@ -187,9 +196,17 @@ export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoad
           <DialogTitle className="flex items-center">
             <PackagePlus className="w-5 h-5 mr-2 text-blue-600" />
             Create Manual Vendor Declaration
+            {containerId && (
+              <Badge variant="secondary" className="ml-2">
+                For Container #{containerId}
+              </Badge>
+            )}
           </DialogTitle>
           <DialogDescription>
-            For walk-in customers or phone orders - Create a shipment declaration without vendor login
+            {containerId 
+              ? `Creating a declaration that will be automatically assigned to Container #${containerId}`
+              : 'For walk-in customers or phone orders - Create a shipment declaration without vendor login'
+            }
           </DialogDescription>
         </DialogHeader>
 

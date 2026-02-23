@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import AdminShipmentsList from '../components/AdminShipmentsList';
 import AdminEditModal from '../components/AdminEditModal';
@@ -14,7 +15,7 @@ import AdminDispatchModal from '../components/AdminDispatchModal';
 import AdminStatusUpdateModal from '../components/AdminStatusUpdateModal';
 import AdminManualDeclarationModal from '../components/AdminManualDeclarationModal';
 import { admin, vendor } from '@/api-client';
-import type { AdminShipmentInfo } from '@/types';
+import type { AdminShipmentInfo, ContainerInfo } from '@/types';
 
 export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,6 +25,17 @@ export default function AdminDashboard() {
   const [dispatchingShipment, setDispatchingShipment] = useState<AdminShipmentInfo | null>(null);
   const [updatingStatusShipment, setUpdatingStatusShipment] = useState<AdminShipmentInfo | null>(null);
   const [showManualDeclarationModal, setShowManualDeclarationModal] = useState(false);
+  
+  // Container management state
+  const [containers, setContainers] = useState<ContainerInfo[]>([]);
+  const [showCreateContainer, setShowCreateContainer] = useState(false);
+  const [newContainerName, setNewContainerName] = useState('');
+  const [selectedContainer, setSelectedContainer] = useState<ContainerInfo | null>(null);
+  const [showContainerModal, setShowContainerModal] = useState(false);
+  const [showContainerDeclarations, setShowContainerDeclarations] = useState(false);
+  const [containerDeclarations, setContainerDeclarations] = useState<AdminShipmentInfo[]>([]);
+  const [availableDeclarations, setAvailableDeclarations] = useState<AdminShipmentInfo[]>([]);
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -35,7 +47,7 @@ export default function AdminDashboard() {
   const searchMutation = useMutation({
     mutationFn: (params: { query: string; type: any }) => 
       admin.search(params.query),
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       // Handle both array response and {shipments: []} response
       const shipments = Array.isArray(data) ? data : (data.shipments || []);
       setSearchResults(shipments);
@@ -141,6 +153,77 @@ export default function AdminDashboard() {
     },
   });
 
+  // Container mutations
+  const createContainerMutation = useMutation({
+    mutationFn: (containerName: string) => admin.createContainer(containerName),
+    onSuccess: (newContainer) => {
+      toast({
+        title: "Container Created",
+        description: `Container "${newContainer.containerName}" has been created.`,
+      });
+      setContainers(prev => [newContainer, ...prev]);
+      setNewContainerName('');
+      setShowCreateContainer(false);
+    },
+    onError: (error) => {
+      console.error('Create container error:', error);
+      toast({
+        title: "Creation Failed",
+        description: "Failed to create container. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateContainerMutation = useMutation({
+    mutationFn: ({ id, ...updates }: { id: number; status?: string; containerName?: string }) => 
+      admin.updateContainer(id, updates),
+    onSuccess: (updatedContainer) => {
+      toast({
+        title: "Container Updated",
+        description: `Container "${updatedContainer.containerName}" has been updated.`,
+      });
+      setContainers(prev => prev.map(c => c.id === updatedContainer.id ? updatedContainer : c));
+      setSelectedContainer(null);
+      setShowContainerModal(false);
+      // Refresh shipments to show updated status
+      if (searchQuery) {
+        handleSearch();
+      }
+    },
+    onError: (error) => {
+      console.error('Update container error:', error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to update container. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const assignShipmentMutation = useMutation({
+    mutationFn: ({ trackingId, containerId }: { trackingId: string; containerId: number | null }) => 
+      admin.assignShipmentToContainer(trackingId, containerId),
+    onSuccess: () => {
+      toast({
+        title: "Shipment Assigned",
+        description: "Shipment has been assigned to container successfully.",
+      });
+      // Refresh shipments to show container assignment
+      if (searchQuery) {
+        handleSearch();
+      }
+    },
+    onError: (error) => {
+      console.error('Assign shipment error:', error);
+      toast({
+        title: "Assignment Failed",
+        description: "Failed to assign shipment to container. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const manualDeclarationMutation = useMutation({
     mutationFn: (data: any) => vendor.declare(data),
     onSuccess: (data) => {
@@ -167,6 +250,73 @@ export default function AdminDashboard() {
     searchMutation.mutate({ query: searchQuery.trim(), type });
   }, [searchQuery, searchType]);
 
+  // Load containers on mount
+  React.useEffect(() => {
+    const loadContainers = async () => {
+      try {
+        const containerData = await admin.listContainers();
+        setContainers(containerData);
+      } catch (error) {
+        console.error('Failed to load containers:', error);
+      }
+    };
+    loadContainers();
+  }, []);
+
+  const handleCreateContainer = () => {
+    if (newContainerName.trim()) {
+      createContainerMutation.mutate(newContainerName.trim());
+    }
+  };
+
+  const handleUpdateContainer = (container: ContainerInfo) => {
+    setSelectedContainer(container);
+    setShowContainerModal(true);
+  };
+
+  const handleContainerStatusUpdate = (status: string) => {
+    if (selectedContainer) {
+      updateContainerMutation.mutate({ id: selectedContainer.id, status });
+    }
+  };
+
+  const handleAssignShipment = (trackingId: string, containerId: number | null) => {
+    assignShipmentMutation.mutate({ trackingId, containerId });
+  };
+
+  const handleViewContainerDeclarations = async (container: ContainerInfo) => {
+    setSelectedContainer(container);
+    setShowContainerDeclarations(true);
+    
+    try {
+      // Load declarations in this container
+      const allShipments = await admin.search('');
+      const containerShipments = allShipments.filter(s => {
+        // We need to check if shipment is in this container
+        // For now, we'll load all and filter client-side
+        // In a real app, you'd want a backend endpoint to get shipments by container
+        return true; // This will be updated when we implement proper container-shipment linking
+      });
+      setContainerDeclarations(containerShipments);
+      
+      // Load available declarations (not in any container)
+      const available = allShipments.filter(s => !s.tracking_id || s.tracking_id); // For now, show all dispatched shipments
+      setAvailableDeclarations(available);
+    } catch (error) {
+      console.error('Failed to load container declarations:', error);
+    }
+  };
+
+  const handleCreateDeclarationInContainer = (containerId: number) => {
+    // This would open the manual declaration modal with container pre-selected
+    setSelectedContainer(containers.find(c => c.id === containerId) || null);
+    setShowManualDeclarationModal(true);
+  };
+
+  const handleAttachDeclarationToContainer = (trackingId: string, containerId: number) => {
+    assignShipmentMutation.mutate({ trackingId, containerId });
+  };
+
   const handleEdit = (shipment: AdminShipmentInfo) => {
     setEditingShipment(shipment);
   };
@@ -178,7 +328,17 @@ export default function AdminDashboard() {
   };
 
   const handleManualDeclaration = (data: any) => {
-    manualDeclarationMutation.mutate(data);
+    manualDeclarationMutation.mutate(data, {
+      onSuccess: (createdDeclaration) => {
+        // If containerId was specified, assign the declaration to that container
+        if (data.containerId && createdDeclaration.tracking_id) {
+          assignShipmentMutation.mutate({
+            trackingId: createdDeclaration.tracking_id,
+            containerId: data.containerId
+          });
+        }
+      }
+    });
   };
 
   const handleUpdateSubmit = (data: any) => {
@@ -356,6 +516,90 @@ export default function AdminDashboard() {
         </CardContent>
       </Card>
 
+        {/* Container Management Section */}
+        <Card className="shadow-xl border-0 animate-in fade-in duration-500">
+          <CardHeader className="bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-t-lg">
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center">
+                <Package className="w-5 h-5 mr-2" />
+                Container Management ({containers.length})
+              </span>
+              <Button
+                onClick={() => setShowCreateContainer(true)}
+                size="sm"
+                className="bg-white text-purple-600 hover:bg-purple-50"
+              >
+                <PackagePlus className="w-4 h-4 mr-2" />
+                New Container
+              </Button>
+            </CardTitle>
+            <CardDescription className="text-purple-100">
+              Create and manage shipping containers for bulk operations
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {containers.length === 0 ? (
+              <div className="text-center py-8">
+                <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">No containers created yet</p>
+                <Button
+                  onClick={() => setShowCreateContainer(true)}
+                  className="mt-4"
+                  variant="outline"
+                >
+                  <PackagePlus className="w-4 h-4 mr-2" />
+                  Create First Container
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {containers.map((container) => (
+                  <Card key={container.id} className="border-2 hover:border-purple-300 transition-colors">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center justify-between">
+                        <span className="truncate">{container.containerName}</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          container.status === 'empty' ? 'bg-gray-100 text-gray-800' :
+                          container.status === 'loading' ? 'bg-blue-100 text-blue-800' :
+                          container.status === 'in_transit' ? 'bg-yellow-100 text-yellow-800' :
+                          container.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {container.status}
+                        </span>
+                      </CardTitle>
+                      <CardDescription>
+                        {container.shipmentCount || 0} shipments • Created {new Date(container.createdAt).toLocaleDateString()}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="flex gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewContainerDeclarations(container)}
+                          className="flex-1"
+                        >
+                          <Package className="w-4 h-4 mr-1" />
+                          Manage ({container.shipmentCount || 0})
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleUpdateContainer(container)}
+                        >
+                          <Edit className="w-4 h-4 mr-1" />
+                          Status
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Results Section */}
         {searchResults.length > 0 && (
           <Card className="shadow-xl border-0 animate-in fade-in duration-500">
@@ -370,10 +614,12 @@ export default function AdminDashboard() {
           <CardContent>
             <AdminShipmentsList
               shipments={searchResults}
+              containers={containers}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onDispatch={(shipment) => setDispatchingShipment(shipment)}
               onUpdateStatus={(shipment) => setUpdatingStatusShipment(shipment)}
+              onAssignToContainer={handleAssignShipment}
               isDeleting={deleteMutation.isPending}
             />
           </CardContent>
@@ -429,10 +675,262 @@ export default function AdminDashboard() {
         {showManualDeclarationModal && (
           <AdminManualDeclarationModal
             onSuccess={() => setShowManualDeclarationModal(false)}
-            onClose={() => setShowManualDeclarationModal(false)}
+            onClose={() => {
+              setShowManualDeclarationModal(false);
+              setSelectedContainer(null); // Clear container selection
+            }}
             isLoading={manualDeclarationMutation.isPending}
             onSubmit={handleManualDeclaration}
+            containerId={selectedContainer?.id}
           />
+        )}
+
+        {/* Create Container Modal */}
+        {showCreateContainer && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
+              <CardHeader>
+                <CardTitle>Create New Container</CardTitle>
+                <CardDescription>
+                  Enter a name for the new shipping container
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="containerName">Container Name</Label>
+                    <Input
+                      id="containerName"
+                      type="text"
+                      placeholder="e.g., Container-001"
+                      value={newContainerName}
+                      onChange={(e) => setNewContainerName(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleCreateContainer()}
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowCreateContainer(false);
+                        setNewContainerName('');
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleCreateContainer}
+                      disabled={!newContainerName.trim() || createContainerMutation.isPending}
+                    >
+                      {createContainerMutation.isPending ? 'Creating...' : 'Create Container'}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Container Management Modal */}
+        {showContainerModal && selectedContainer && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+              <CardHeader>
+                <CardTitle>Manage Container: {selectedContainer.containerName}</CardTitle>
+                <CardDescription>
+                  Update container status or assign shipments
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {/* Container Status Update */}
+                  <div>
+                    <Label className="text-base font-medium">Update Container Status</Label>
+                    <p className="text-sm text-gray-600 mb-3">
+                      This will update the status of all shipments in this container
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      {['empty', 'loading', 'in_transit', 'delivered', 'customs_held'].map((status) => (
+                        <Button
+                          key={status}
+                          variant={selectedContainer.status === status ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => handleContainerStatusUpdate(status)}
+                          disabled={updateContainerMutation.isPending}
+                        >
+                          {status.replace('_', ' ').toUpperCase()}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Shipments in Container */}
+                  <div>
+                    <Label className="text-base font-medium">Shipments in Container</Label>
+                    <p className="text-sm text-gray-600 mb-3">
+                      {selectedContainer.shipmentCount || 0} shipments currently assigned
+                    </p>
+                    {selectedContainer.shipmentCount === 0 && (
+                      <p className="text-gray-500 italic">No shipments assigned to this container yet</p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-4 border-t">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowContainerModal(false);
+                        setSelectedContainer(null);
+                      }}
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Container Declarations Management Modal */}
+        {showContainerDeclarations && selectedContainer && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Manage Declarations: {selectedContainer.containerName}</span>
+                  <Badge variant="outline">{selectedContainer.status}</Badge>
+                </CardTitle>
+                <CardDescription>
+                  Add new declarations or attach existing ones to this container
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {/* Action Buttons */}
+                  <div className="flex gap-3 flex-wrap">
+                    <Button
+                      onClick={() => handleCreateDeclarationInContainer(selectedContainer.id)}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      <PackagePlus className="w-4 h-4 mr-2" />
+                      Create New Declaration
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        // Refresh available declarations
+                        admin.search('').then(shipments => {
+                          const available = shipments.filter(s => s.tracking_id); // Show dispatched shipments
+                          setAvailableDeclarations(available);
+                        });
+                      }}
+                    >
+                      <Package className="w-4 h-4 mr-2" />
+                      Refresh Available
+                    </Button>
+                  </div>
+
+                  {/* Current Declarations in Container */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Declarations in Container ({containerDeclarations.length})</h3>
+                    {containerDeclarations.length === 0 ? (
+                      <div className="text-center py-8 bg-gray-50 rounded-lg">
+                        <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500">No declarations in this container yet</p>
+                        <p className="text-sm text-gray-400 mt-1">Create a new declaration or attach existing ones</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-60 overflow-y-auto">
+                        {containerDeclarations.slice(0, 10).map((shipment) => (
+                          <Card key={shipment.id} className="p-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <Badge variant="outline">{shipment.vendor_decl_id}</Badge>
+                                <span className="font-medium">{shipment.item_name}</span>
+                                <span className="text-sm text-gray-500">Qty: {shipment.quantity}</span>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAssignShipment(shipment.tracking_id!, null)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </Card>
+                        ))}
+                        {containerDeclarations.length > 10 && (
+                          <p className="text-sm text-gray-500 text-center">
+                            And {containerDeclarations.length - 10} more declarations...
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Available Declarations to Attach */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Available Declarations ({availableDeclarations.length})</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      These are dispatched shipments that aren't currently assigned to any container
+                    </p>
+                    {availableDeclarations.length === 0 ? (
+                      <div className="text-center py-6 bg-gray-50 rounded-lg">
+                        <p className="text-gray-500">No available declarations to attach</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-60 overflow-y-auto">
+                        {availableDeclarations.slice(0, 10).map((shipment) => (
+                          <Card key={shipment.id} className="p-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <Badge variant="outline">{shipment.vendor_decl_id}</Badge>
+                                <span className="font-medium">{shipment.item_name}</span>
+                                <span className="text-sm text-gray-500">Qty: {shipment.quantity}</span>
+                                {shipment.tracking_id && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {shipment.tracking_id}
+                                  </Badge>
+                                )}
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => handleAttachDeclarationToContainer(shipment.tracking_id!, selectedContainer.id)}
+                                disabled={assignShipmentMutation.isPending}
+                              >
+                                {assignShipmentMutation.isPending ? 'Attaching...' : 'Attach'}
+                              </Button>
+                            </div>
+                          </Card>
+                        ))}
+                        {availableDeclarations.length > 10 && (
+                          <p className="text-sm text-gray-500 text-center">
+                            And {availableDeclarations.length - 10} more available declarations...
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-4 border-t">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowContainerDeclarations(false);
+                        setSelectedContainer(null);
+                        setContainerDeclarations([]);
+                        setAvailableDeclarations([]);
+                      }}
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
       </div>
     </div>

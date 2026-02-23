@@ -1,24 +1,29 @@
-import { Edit, Trash2, Package, User, Mail, Calendar, Weight, Hash, Truck, MapPin, FileText, CheckCircle } from 'lucide-react';
+import { Edit, Trash2, Package, User, Mail, Calendar, Weight, Hash, Truck, MapPin, FileText, CheckCircle, Container } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import type { AdminShipmentInfo } from '@/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { AdminShipmentInfo, ContainerInfo } from '@/types';
 
 interface AdminShipmentsListProps {
   shipments: AdminShipmentInfo[];
+  containers?: ContainerInfo[];
   onEdit: (shipment: AdminShipmentInfo) => void;
   onDelete: (shipment: AdminShipmentInfo) => void;
   onDispatch?: (shipment: AdminShipmentInfo) => void;
   onUpdateStatus?: (shipment: AdminShipmentInfo) => void;
+  onAssignToContainer?: (trackingId: string, containerId: number | null) => void;
   isDeleting: boolean;
 }
 
 export default function AdminShipmentsList({ 
   shipments, 
+  containers = [],
   onEdit, 
   onDelete,
   onDispatch,
   onUpdateStatus,
+  onAssignToContainer,
   isDeleting 
 }: AdminShipmentsListProps) {
   const getStatusColor = (status: string) => {
@@ -113,6 +118,30 @@ export default function AdminShipmentsList({
                     <Trash2 className="w-4 h-4" />
                     <span>Delete</span>
                   </Button>
+                  {shipment.tracking_id && onAssignToContainer && containers.length > 0 && (
+                    <div className="flex items-center space-x-2">
+                      <Container className="w-4 h-4 text-gray-400" />
+                      <Select
+                        value=""
+                        onValueChange={(value) => {
+                          const containerId = value === 'none' ? null : parseInt(value);
+                          onAssignToContainer(shipment.tracking_id!, containerId);
+                        }}
+                      >
+                        <SelectTrigger className="w-40 h-8 text-xs">
+                          <SelectValue placeholder="Assign to Container" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Remove from Container</SelectItem>
+                          {containers.map((container) => (
+                            <SelectItem key={container.id} value={container.id.toString()}>
+                              {container.containerName} ({container.shipmentCount || 0})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
               </div>
 
