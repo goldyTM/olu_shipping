@@ -88,8 +88,19 @@ export default function Header() {
       }
     });
 
+    // Listen for cross-tab auth broadcasts
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === 'supabase.auth.broadcast' && mounted) {
+        console.log('Header: Auth broadcast received, reloading user data...');
+        loadUserData();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+
     return () => {
       mounted = false;
+      window.removeEventListener('storage', handleStorageChange);
       if (listener && typeof listener.subscription?.unsubscribe === 'function') {
         listener.subscription.unsubscribe();
       }
