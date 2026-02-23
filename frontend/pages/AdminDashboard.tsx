@@ -597,8 +597,9 @@ export default function AdminDashboard() {
                         <span className="truncate">{container.containerName}</span>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           container.status === 'pending' ? 'bg-gray-100 text-gray-800' :
-                          container.status === 'dispatched' ? 'bg-blue-100 text-blue-800' :
+                          container.status === 'processing' ? 'bg-blue-100 text-blue-800' :
                           container.status === 'in_transit' ? 'bg-yellow-100 text-yellow-800' :
+                          container.status === 'out_for_delivery' ? 'bg-orange-100 text-orange-800' :
                           container.status === 'delivered' ? 'bg-green-100 text-green-800' :
                           'bg-gray-200 text-gray-700'
                         }`}>
@@ -787,7 +788,7 @@ export default function AdminDashboard() {
                       This will update the status of all shipments in this container
                     </p>
                     <div className="flex gap-2 flex-wrap">
-                      {['pending', 'dispatched', 'in_transit', 'delivered'].map((status) => (
+                      {['pending', 'processing', 'in_transit', 'out_for_delivery', 'delivered'].map((status) => (
                         <Button
                           key={status}
                           variant={selectedContainer.status === status ? 'default' : 'outline'}
