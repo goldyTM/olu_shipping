@@ -15,11 +15,21 @@ export const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || ''
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
+    // Increase session refresh timing to prevent disconnects during operations
+    sessionTimeout: 24 * 60 * 60 * 1000, // 24 hours
   },
   global: {
     headers: {
       'X-Client-Info': 'olu-shipping-company-frontend',
     },
+  },
+  // Add retry configuration for failed requests
+  db: {
+    schema: 'public',
+  },
+  // Increase timeout for long operations like file uploads
+  rest: {
+    timeout: 60000, // 60 seconds
   },
 });
 

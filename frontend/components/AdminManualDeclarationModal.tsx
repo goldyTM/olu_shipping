@@ -95,6 +95,9 @@ export default function AdminManualDeclarationModal({ onSuccess, onClose, isLoad
 
   const uploadFile = async (file: File, type: 'invoice' | 'packing_list') => {
     try {
+      // Refresh session before upload to prevent disconnects
+      await supabase.auth.getSession();
+
       const fileExt = file.name.split('.').pop();
       const fileName = `${formData.vendor_decl_id || 'temp'}_${type}_${Date.now()}.${fileExt}`;
       const filePath = `shipment-documents/${fileName}`;

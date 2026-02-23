@@ -50,6 +50,9 @@ export default function VendorEditModal({ shipment, onSave, onClose, isLoading }
 
   const uploadFile = async (file: File, type: 'invoice' | 'packing_list') => {
     try {
+      // Refresh session before upload to prevent disconnects
+      await supabase.auth.getSession();
+
       const fileExt = file.name.split('.').pop();
       const fileName = `${shipment.vendor_decl_id}_${type}_${Date.now()}.${fileExt}`;
       const filePath = `shipment-documents/${fileName}`;
