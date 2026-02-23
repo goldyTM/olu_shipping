@@ -147,6 +147,9 @@ export const admin = {
   search: async (query?: string) => {
     console.log('Admin search query:', query);
     
+    // Refresh session before search to prevent disconnects during cross-tab operations
+    await supabase.auth.getSession();
+    
     let supabaseQuery = supabase
       .from('vendor_shipments')
       .select(`
@@ -467,6 +470,9 @@ export const tracking = {
     console.log('Tracking lookup for:', trackingNumber);
     
     try {
+      // Refresh session before tracking to prevent disconnects during cross-tab operations
+      await supabase.auth.getSession();
+      
       // First get the receiver shipment
       let baseQuery = supabase
         .from('receiver_shipments')
