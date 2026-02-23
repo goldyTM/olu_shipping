@@ -4,7 +4,10 @@ SET status = 'pending'
 WHERE status IS NULL
    OR status NOT IN ('pending', 'processing', 'in_transit', 'out_for_delivery', 'delivered');
 
--- Add a CHECK constraint to ensure valid statuses
+-- Drop existing constraint if it exists, then add the CHECK constraint
+ALTER TABLE receiver_shipments
+DROP CONSTRAINT IF EXISTS receiver_shipments_valid_status;
+
 ALTER TABLE receiver_shipments
 ADD CONSTRAINT receiver_shipments_valid_status CHECK (
   status IN ('pending', 'processing', 'in_transit', 'out_for_delivery', 'delivered')
@@ -16,7 +19,10 @@ SET status = 'pending'
 WHERE status IS NULL
    OR status NOT IN ('pending', 'processing', 'in_transit', 'out_for_delivery', 'delivered');
 
--- Add CHECK constraint to shipment_updates
+-- Drop existing constraint if it exists, then add the CHECK constraint
+ALTER TABLE shipment_updates
+DROP CONSTRAINT IF EXISTS shipment_updates_valid_status;
+
 ALTER TABLE shipment_updates
 ADD CONSTRAINT shipment_updates_valid_status CHECK (
   status IN ('pending', 'processing', 'in_transit', 'out_for_delivery', 'delivered')
