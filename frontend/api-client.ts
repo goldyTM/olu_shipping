@@ -378,18 +378,24 @@ export const admin = {
   },
 
   assignShipmentToContainer: async (trackingId: string, containerId: number | null) => {
-    // If assigning to container, fetch container status to sync
-    let newStatus: string = (await supabase.from('receiver_shipments').select('status').eq('tracking_id', trackingId).single()).data?.status || 'pending';
+    // Get current shipment status safely
+    const { data: shipmentData } = await supabase
+      .from('receiver_shipments')
+      .select('status')
+      .eq('tracking_id', trackingId);
+    
+    let newStatus: string = shipmentData?.[0]?.status || 'pending';
     
     if (containerId !== null) {
-      const { data: container } = await supabase
+      // Fetch container with error handling
+      const { data: containerData, error: containerError } = await supabase
         .from('containers')
         .select('status')
         .eq('id', containerId)
         .single();
       
-      if (container) {
-        newStatus = container.status;
+      if (!containerError && containerData?.status) {
+        newStatus = containerData.status;
       }
     }
 
