@@ -353,7 +353,7 @@ export const admin = {
         .eq('container_id', id);
 
       if (shipments) {
-        const updates = shipments.map(s => ({
+        const shipmentUpdates = shipments.map(s => ({
           tracking_id: s.tracking_id,
           status: updates.status,
           notes: 'Status updated via container',
@@ -362,7 +362,7 @@ export const admin = {
 
         const { error: updateError } = await supabase
           .from('shipment_updates')
-          .insert(updates);
+          .insert(shipmentUpdates);
 
         if (updateError) throw updateError;
       }
