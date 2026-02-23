@@ -209,7 +209,8 @@ router.put('/shipment/container', async (req, res) => {
       return res.status(404).json({ error: 'Shipment not found' });
     }
 
-    // If assigning to container, verify container exists
+    // If assigning to container, verify container exists and sync status
+    let containerStatus = existing.status || 'pending';
     if (containerId !== null) {
       const { data: container, error: containerError } = await supabaseAdmin
         .from('containers')
@@ -220,12 +221,15 @@ router.put('/shipment/container', async (req, res) => {
       if (containerError || !container) {
         return res.status(404).json({ error: 'Container not found' });
       }
+
+      // Set containerStatus to sync with the container
+      containerStatus = container.status;
     }
 
-    // Update the shipment
+    // Update the shipment with container_id and sync status
     const { error } = await supabaseAdmin
       .from('receiver_shipments')
-      .update({ container_id: containerId })
+      .update({ container_id: containerId, status: containerStatus })
       .eq('tracking_id', trackingId);
 
     if (error) throw error;
@@ -236,7 +240,7 @@ router.put('/shipment/container', async (req, res) => {
       .from('shipment_updates')
       .insert({
         tracking_id: trackingId,
-        status: existing.status || 'pending',
+        status: containerStatus,
         notes: action,
         timestamp: new Date().toISOString(),
       });
