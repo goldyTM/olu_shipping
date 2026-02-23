@@ -59,7 +59,7 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
         setAuthenticated(false);
         setLoading(false);
       }
-    }, 5000);
+    }, 3000); // Reduced timeout to 3 seconds
 
     // Listen for auth changes
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {

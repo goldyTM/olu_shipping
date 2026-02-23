@@ -16,6 +16,11 @@ export const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || ''
     detectSessionInUrl: true,
     flowType: 'pkce',
   },
+  global: {
+    headers: {
+      'X-Client-Info': 'olu-shipping-company-frontend',
+    },
+  },
 });
 
 export default supabase;
