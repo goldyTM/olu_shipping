@@ -40,3 +40,27 @@ export interface AdminSearchResponse {
   shipments: AdminShipmentInfo[];
   total: number;
 }
+
+export interface ContainerInfo {
+  id: number;
+  containerName: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+  shipmentCount?: number;
+}
+
+export interface CreateContainerRequest {
+  containerName: string;
+}
+
+export interface UpdateContainerRequest {
+  id: number;
+  status?: string;
+  containerName?: string;
+}
+
+export interface AssignShipmentToContainerRequest {
+  trackingId: string;
+  containerId: number | null; // null to remove from container
+}

@@ -43,3 +43,12 @@ export interface TrackingInfo {
   location?: string;
   updated_at: Date | string;
 }
+
+export interface ContainerInfo {
+  id: number;
+  containerName: string;
+  status: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  shipmentCount?: number;
+}

@@ -281,6 +281,123 @@ export const admin = {
     if (insertError) throw insertError;
     return update;
   },
+
+  // Container management
+  createContainer: async (containerName: string) => {
+    const { data, error } = await supabase
+      .from('containers')
+      .insert({
+        container_name: containerName,
+        status: 'empty'
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return {
+      id: data.id,
+      containerName: data.container_name,
+      status: data.status,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  },
+
+  listContainers: async () => {
+    const { data, error } = await supabase
+      .from('containers')
+      .select(`
+        *,
+        receiver_shipments(count)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data?.map(c => ({
+      id: c.id,
+      containerName: c.container_name,
+      status: c.status,
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
+      shipmentCount: c.receiver_shipments?.[0]?.count || 0,
+    })) || [];
+  },
+
+  updateContainer: async (id: number, updates: { status?: string; containerName?: string }) => {
+    const { data, error } = await supabase
+      .from('containers')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // If status changed, update all shipments in container
+    if (updates.status) {
+      // Update shipments
+      const { error: shipmentError } = await supabase
+        .from('receiver_shipments')
+        .update({ status: updates.status })
+        .eq('container_id', id);
+
+      if (shipmentError) throw shipmentError;
+
+      // Add updates for tracking
+      const { data: shipments } = await supabase
+        .from('receiver_shipments')
+        .select('tracking_id')
+        .eq('container_id', id);
+
+      if (shipments) {
+        const updates = shipments.map(s => ({
+          tracking_id: s.tracking_id,
+          status: updates.status,
+          notes: 'Status updated via container',
+          timestamp: new Date().toISOString(),
+        }));
+
+        const { error: updateError } = await supabase
+          .from('shipment_updates')
+          .insert(updates);
+
+        if (updateError) throw updateError;
+      }
+    }
+
+    return {
+      id: data.id,
+      containerName: data.container_name,
+      status: data.status,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  },
+
+  assignShipmentToContainer: async (trackingId: string, containerId: number | null) => {
+    const { error } = await supabase
+      .from('receiver_shipments')
+      .update({ container_id: containerId })
+      .eq('tracking_id', trackingId);
+
+    if (error) throw error;
+
+    // Add tracking update
+    const action = containerId ? `Assigned to container ${containerId}` : 'Removed from container';
+    const { error: updateError } = await supabase
+      .from('shipment_updates')
+      .insert({
+        tracking_id: trackingId,
+        status: (await supabase.from('receiver_shipments').select('status').eq('tracking_id', trackingId).single()).data?.status || 'pending',
+        notes: action,
+        timestamp: new Date().toISOString(),
+      });
+
+    if (updateError) throw updateError;
+  },
 };
 
 // Tracking API
