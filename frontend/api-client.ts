@@ -288,7 +288,7 @@ export const admin = {
       .from('containers')
       .insert({
         container_name: containerName,
-        status: 'empty'
+        status: 'pending'
       })
       .select()
       .single();

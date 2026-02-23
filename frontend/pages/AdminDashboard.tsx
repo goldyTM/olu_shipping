@@ -596,11 +596,11 @@ export default function AdminDashboard() {
                       <CardTitle className="text-lg flex items-center justify-between">
                         <span className="truncate">{container.containerName}</span>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          container.status === 'empty' ? 'bg-gray-100 text-gray-800' :
-                          container.status === 'loading' ? 'bg-blue-100 text-blue-800' :
+                          container.status === 'pending' ? 'bg-gray-100 text-gray-800' :
+                          container.status === 'dispatched' ? 'bg-blue-100 text-blue-800' :
                           container.status === 'in_transit' ? 'bg-yellow-100 text-yellow-800' :
                           container.status === 'delivered' ? 'bg-green-100 text-green-800' :
-                          'bg-red-100 text-red-800'
+                          'bg-gray-200 text-gray-700'
                         }`}>
                           {container.status}
                         </span>
@@ -787,7 +787,7 @@ export default function AdminDashboard() {
                       This will update the status of all shipments in this container
                     </p>
                     <div className="flex gap-2 flex-wrap">
-                      {['empty', 'loading', 'in_transit', 'delivered', 'customs_held'].map((status) => (
+                      {['pending', 'dispatched', 'in_transit', 'delivered'].map((status) => (
                         <Button
                           key={status}
                           variant={selectedContainer.status === status ? 'default' : 'outline'}

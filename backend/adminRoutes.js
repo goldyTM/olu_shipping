@@ -67,7 +67,7 @@ router.post('/container', async (req, res) => {
       .from('containers')
       .insert({
         container_name: containerName,
-        status: 'empty'
+        status: 'pending'
       })
       .select()
       .single();
