@@ -201,7 +201,7 @@ router.put('/shipment/container', async (req, res) => {
     // Verify shipment exists
     const { data: existing, error: findError } = await supabaseAdmin
       .from('receiver_shipments')
-      .select('tracking_id')
+      .select('tracking_id, status')
       .eq('tracking_id', trackingId)
       .single();
 
@@ -213,7 +213,7 @@ router.put('/shipment/container', async (req, res) => {
     if (containerId !== null) {
       const { data: container, error: containerError } = await supabaseAdmin
         .from('containers')
-        .select('id')
+        .select('id, status')
         .eq('id', containerId)
         .single();
 
@@ -236,7 +236,7 @@ router.put('/shipment/container', async (req, res) => {
       .from('shipment_updates')
       .insert({
         tracking_id: trackingId,
-        status: (await supabaseAdmin.from('receiver_shipments').select('status').eq('tracking_id', trackingId).single()).data?.status || 'pending',
+        status: existing.status || 'pending',
         notes: action,
         timestamp: new Date().toISOString(),
       });
@@ -246,6 +246,65 @@ router.put('/shipment/container', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error assigning shipment to container:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get shipments in a container
+router.get('/container/:id/shipments', async (req, res) => {
+  if (!checkSecret(req, res)) return;
+  try {
+    const { id } = req.params;
+    
+    const { data, error } = await supabaseAdmin
+      .from('receiver_shipments')
+      .select(`
+        *,
+        vendor_shipments!receiver_shipments_vendor_decl_id_fkey (*)
+      `)
+      .eq('container_id', id);
+
+    if (error) throw error;
+    
+    const shipments = data?.map(rs => ({
+      ...rs.vendor_shipments,
+      tracking_id: rs.tracking_id,
+      status: rs.status,
+      container_id: rs.container_id,
+    })) || [];
+    
+    res.json(shipments);
+  } catch (error) {
+    console.error('Error getting container shipments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete container
+router.delete('/container/:id', async (req, res) => {
+  if (!checkSecret(req, res)) return;
+  try {
+    const { id } = req.params;
+    
+    // First, remove container_id from all shipments in this container
+    const { error: updateError } = await supabaseAdmin
+      .from('receiver_shipments')
+      .update({ container_id: null })
+      .eq('container_id', id);
+
+    if (updateError) throw updateError;
+
+    // Then delete the container
+    const { error } = await supabaseAdmin
+      .from('containers')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting container:', error);
     res.status(500).json({ error: error.message });
   }
 });

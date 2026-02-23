@@ -213,12 +213,37 @@ export default function AdminDashboard() {
       if (searchQuery) {
         handleSearch();
       }
+      // Refresh container declarations if modal is open
+      if (selectedContainer) {
+        handleViewContainerDeclarations(selectedContainer);
+      }
     },
     onError: (error) => {
       console.error('Assign shipment error:', error);
       toast({
         title: "Assignment Failed",
         description: "Failed to assign shipment to container. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteContainerMutation = useMutation({
+    mutationFn: (containerId: number) => admin.deleteContainer(containerId),
+    onSuccess: (_, deleteId) => {
+      toast({
+        title: "Container Deleted",
+        description: "Container has been deleted and shipments have been released.",
+      });
+      setContainers(prev => prev.filter(c => c.id !== deleteId));
+      setSelectedContainer(null);
+      setShowContainerModal(false);
+    },
+    onError: (error) => {
+      console.error('Delete container error:', error);
+      toast({
+        title: "Delete Failed",
+        description: "Failed to delete container. Please try again.",
         variant: "destructive",
       });
     },
@@ -289,26 +314,38 @@ export default function AdminDashboard() {
     setShowContainerDeclarations(true);
     
     try {
-      // Load declarations in this container
+      // Load all dispatched shipments
       const allShipments = await admin.search('');
-      const containerShipments = allShipments.filter(s => {
-        // We need to check if shipment is in this container
-        // For now, we'll load all and filter client-side
-        // In a real app, you'd want a backend endpoint to get shipments by container
-        return true; // This will be updated when we implement proper container-shipment linking
-      });
-      setContainerDeclarations(containerShipments);
       
-      // Load available declarations (not in any container)
-      const available = allShipments.filter(s => !s.tracking_id || s.tracking_id); // For now, show all dispatched shipments
+      // Get shipments that are dispatched (have tracking_id)
+      const dispatchedShipments = allShipments.filter(s => s.tracking_id);
+      
+      // Load declarations currently in this container
+      const containerShipments = await admin.getContainerShipments(container.id);
+      setContainerDeclarations(containerShipments as any);
+      
+      // Load available declarations (dispatched but not in any container)
+      const available = dispatchedShipments.filter(s => 
+        !containerShipments.find(cs => cs.tracking_id === s.tracking_id)
+      );
       setAvailableDeclarations(available);
     } catch (error) {
       console.error('Failed to load container declarations:', error);
+      toast({
+        title: "Load Failed",
+        description: "Failed to load container declarations.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteContainer = (containerId: number) => {
+    if (confirm('Are you sure you want to delete this container? All shipments will be released.')) {
+      deleteContainerMutation.mutate(containerId);
     }
   };
 
   const handleCreateDeclarationInContainer = (containerId: number) => {
-    // This would open the manual declaration modal with container pre-selected
     setSelectedContainer(containers.find(c => c.id === containerId) || null);
     setShowManualDeclarationModal(true);
   };
@@ -775,7 +812,16 @@ export default function AdminDashboard() {
                     )}
                   </div>
 
-                  <div className="flex gap-2 justify-end pt-4 border-t">
+                  <div className="flex gap-2 justify-between pt-4 border-t">
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleDeleteContainer(selectedContainer.id)}
+                      disabled={deleteContainerMutation.isPending}
+                      className="flex items-center space-x-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>{deleteContainerMutation.isPending ? 'Deleting...' : 'Delete Container'}</span>
+                    </Button>
                     <Button
                       variant="outline"
                       onClick={() => {

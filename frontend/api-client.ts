@@ -398,6 +398,45 @@ export const admin = {
 
     if (updateError) throw updateError;
   },
+
+  getContainerShipments: async (containerId: number) => {
+    const { data, error } = await supabase
+      .from('receiver_shipments')
+      .select(`
+        *,
+        vendor_shipments!receiver_shipments_vendor_decl_id_fkey (*)
+      `)
+      .eq('container_id', containerId);
+
+    if (error) throw error;
+    
+    return data?.map(rs => ({
+      ...rs.vendor_shipments,
+      tracking_id: rs.tracking_id,
+      status: rs.status,
+      container_id: rs.container_id,
+    })) || [];
+  },
+
+  deleteContainer: async (containerId: number) => {
+    // First, remove container_id from all shipments in this container
+    const { error: updateError } = await supabase
+      .from('receiver_shipments')
+      .update({ container_id: null })
+      .eq('container_id', containerId);
+
+    if (updateError) throw updateError;
+
+    // Then delete the container
+    // Note: We're using RLS, so we'll delete via the direct Supabase method
+    const { error } = await supabase
+      .from('containers')
+      .delete()
+      .eq('id', containerId);
+
+    if (error) throw error;
+    return { success: true };
+  },
 };
 
 // Tracking API
