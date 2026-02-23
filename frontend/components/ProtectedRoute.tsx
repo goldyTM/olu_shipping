@@ -19,7 +19,26 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
       try {
         console.log('ProtectedRoute: Checking authentication...');
         
-        // Use getSession which reads from localStorage
+        // First try to get session from localStorage directly (faster)
+        const storedSession = localStorage.getItem('supabase.auth.token');
+        if (storedSession) {
+          try {
+            const sessionData = JSON.parse(storedSession);
+            if (sessionData?.expires_at && sessionData.expires_at * 1000 > Date.now()) {
+              console.log('ProtectedRoute: Found valid stored session');
+              if (mounted) {
+                setAuthenticated(true);
+                setLoading(false);
+                authCheckCompleted = true;
+                return;
+              }
+            }
+          } catch (e) {
+            console.log('ProtectedRoute: Invalid stored session data');
+          }
+        }
+        
+        // Fallback to Supabase session check
         const { data: { session }, error } = await supabase.auth.getSession();
         
         authCheckCompleted = true;
@@ -52,14 +71,14 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
     // Start auth check immediately
     checkAuth();
 
-    // Set a backup timeout - only if auth check hasn't completed
+    // Set a backup timeout - increased for cross-tab synchronization
     const timeoutId = setTimeout(() => {
       if (!authCheckCompleted && mounted) {
         console.warn('ProtectedRoute: Auth check timeout, assuming no session');
         setAuthenticated(false);
         setLoading(false);
       }
-    }, 5000); // Increased back to 5 seconds for reliability
+    }, 8000); // Increased to 8 seconds for cross-tab sync // Increased back to 5 seconds for reliability
 
     // Listen for auth changes
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
@@ -85,9 +104,20 @@ export default function ProtectedRoute({ children, redirectTo = '/login' }: Prop
       }
     });
 
+    // Listen for cross-tab auth broadcasts
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === 'supabase.auth.broadcast' && mounted) {
+        console.log('ProtectedRoute: Auth broadcast received, rechecking session...');
+        checkAuth();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+
     return () => {
       mounted = false;
       clearTimeout(timeoutId);
+      window.removeEventListener('storage', handleStorageChange);
       if (listener?.subscription?.unsubscribe) {
         listener.subscription.unsubscribe();
       }

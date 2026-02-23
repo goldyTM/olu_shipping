@@ -33,4 +33,28 @@ export const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || ''
   },
 });
 
+// Add cross-tab session synchronization
+if (typeof window !== 'undefined') {
+  // Listen for storage changes to sync auth state across tabs
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'supabase.auth.token' && event.newValue) {
+      console.log('Auth token updated in another tab, refreshing session...');
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          console.log('Session synchronized across tabs');
+        }
+      });
+    }
+  });
+
+  // Broadcast auth state changes to other tabs
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+      // Broadcast to other tabs
+      localStorage.setItem('supabase.auth.broadcast', Date.now().toString());
+      setTimeout(() => localStorage.removeItem('supabase.auth.broadcast'), 100);
+    }
+  });
+}
+
 export default supabase;
