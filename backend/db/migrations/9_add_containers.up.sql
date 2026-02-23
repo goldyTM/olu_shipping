@@ -2,7 +2,7 @@
 CREATE TABLE containers (
   id BIGSERIAL PRIMARY KEY,
   container_name TEXT NOT NULL UNIQUE,
-  status TEXT NOT NULL DEFAULT 'empty',
+  status TEXT NOT NULL DEFAULT 'pending',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
